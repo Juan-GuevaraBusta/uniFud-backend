@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { UniversitiesModule } from './universities/universities.module';
 import { RestaurantsModule } from './restaurants/restaurants.module';
+import { DishesModule } from './dishes/dishes.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -36,6 +37,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     AuthModule,
     UniversitiesModule,
     RestaurantsModule,
+    DishesModule,
   ],
   controllers: [AppController],
   providers: [

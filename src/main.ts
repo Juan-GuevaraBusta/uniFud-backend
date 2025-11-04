@@ -45,6 +45,9 @@ async function bootstrap() {
      .setVersion('1.0.0')
      .addTag('Autenticación', 'Endpoints de registro, login y gestión de sesiones')
      .addTag('Usuarios', 'Gestión de usuarios')
+     .addTag('Universidades', 'Gestión de universidades')
+     .addTag('Restaurantes', 'Gestión de restaurantes')
+     .addTag('Platos', 'Gestión de platos y menús')
      .addBearerAuth()
      .build();
    
