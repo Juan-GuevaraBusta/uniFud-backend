@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { Restaurant } from '../../restaurants/entities/restaurant.entity';
 import { Topping } from './topping.entity';
+import { DishAvailability } from './dish-availability.entity';
 
 export enum DishType {
   SIMPLE = 'simple',               // Plato básico sin opciones
@@ -50,9 +51,8 @@ export class Dish {
   @OneToMany(() => Topping, (topping) => topping.dish, { cascade: true })
   toppings: Topping[];
 
-  // Relación con DishAvailability se agregará después
-  // @OneToMany(() => DishAvailability, (availability) => availability.dish)
-  // availability: DishAvailability[];
+  @OneToMany(() => DishAvailability, (availability) => availability.dish)
+  availability: DishAvailability[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

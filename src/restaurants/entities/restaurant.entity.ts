@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn, Index } from 'typeorm';
 import { University } from '../../universities/entities/university.entity';
 import { User } from '../../users/entities/user.entity';
+import { Dish } from '../../dishes/entities/dish.entity';
 
 @Entity('restaurants')
 @Index(['nombre', 'university'], { unique: true }) // Un restaurante único por universidad
@@ -41,9 +42,8 @@ export class Restaurant {
   @JoinColumn({ name: 'owner_id' })
   owner: User;
 
-  // Relaciones con Dishes y Orders se agregarán después
-  // @OneToMany(() => Dish, (dish) => dish.restaurant)
-  // dishes: Dish[];
+  @OneToMany(() => Dish, (dish) => dish.restaurant)
+  dishes: Dish[];
   
   // @OneToMany(() => Order, (order) => order.restaurant)
   // orders: Order[];

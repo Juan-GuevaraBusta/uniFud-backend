@@ -4,6 +4,7 @@ import { DishesService } from './dishes.service';
 import { CreateDishDto } from './dto/create-dish.dto';
 import { UpdateDishDto } from './dto/update-dish.dto';
 import { DishResponseDto } from './dto/dish-response.dto';
+import { UpdateAvailabilityDto, BulkUpdateAvailabilityDto } from './dto/update-availability.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -308,5 +309,125 @@ export class DishesController {
   ) {
     await this.dishesService.remove(id, user.id, user.role);
   }
+
+  // ==================== ENDPOINTS DE DISPONIBILIDAD ====================
+
+  /**
+   * Actualizar disponibilidad de un plato específico
+   */
+  @Patch(':id/availability')
+  @Roles(UserRole.RESTAURANT_OWNER, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Actualizar disponibilidad',
+    description: 'Actualiza la disponibilidad de un plato específico',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID del plato',
+  })
+  @ApiQuery({
+    name: 'restaurantId',
+    description: 'ID del restaurante',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Disponibilidad actualizada exitosamente',
+  })
+  async updateAvailability(
+    @Param('id') dishId: string,
+    @Query('restaurantId') restaurantId: string,
+    @Body() updateAvailabilityDto: UpdateAvailabilityDto,
+    @CurrentUser() user: any,
+  ) {
+    return await this.dishesService.updateAvailability(
+      dishId,
+      restaurantId,
+      updateAvailabilityDto.disponible,
+      user.id,
+      user.role,
+    );
+  }
+
+  /**
+   * Obtener disponibilidad de todos los platos de un restaurante
+   */
+  @Public()
+  @Get('availability/restaurant/:restaurantId')
+  @ApiOperation({
+    summary: 'Disponibilidad del restaurante',
+    description: 'Obtiene la disponibilidad de todos los platos de un restaurante',
+  })
+  @ApiParam({
+    name: 'restaurantId',
+    description: 'ID del restaurante',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de disponibilidades',
+  })
+  async getRestaurantAvailability(@Param('restaurantId') restaurantId: string) {
+    return await this.dishesService.getRestaurantAvailability(restaurantId);
+  }
+
+  /**
+   * Obtener menú con disponibilidad incluida
+   */
+  @Public()
+  @Get('menu/:restaurantId')
+  @ApiOperation({
+    summary: 'Menú con disponibilidad',
+    description: 'Obtiene el menú completo de un restaurante con información de disponibilidad',
+  })
+  @ApiParam({
+    name: 'restaurantId',
+    description: 'ID del restaurante',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Menú completo con disponibilidad',
+  })
+  async getMenuWithAvailability(@Param('restaurantId') restaurantId: string) {
+    return await this.dishesService.getMenuWithAvailability(restaurantId);
+  }
+
+  /**
+   * Actualización masiva de disponibilidad
+   */
+  @Patch('availability/restaurant/:restaurantId/bulk')
+  @Roles(UserRole.RESTAURANT_OWNER, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Actualización masiva de disponibilidad',
+    description: 'Actualiza la disponibilidad de múltiples platos a la vez',
+  })
+  @ApiParam({
+    name: 'restaurantId',
+    description: 'ID del restaurante',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Disponibilidades actualizadas exitosamente',
+    schema: {
+      example: {
+        updated: 5,
+        results: []
+      }
+    },
+  })
+  async bulkUpdateAvailability(
+    @Param('restaurantId') restaurantId: string,
+    @Body() bulkUpdateDto: BulkUpdateAvailabilityDto,
+    @CurrentUser() user: any,
+  ) {
+    return await this.dishesService.bulkUpdateAvailability(
+      restaurantId,
+      bulkUpdateDto,
+      user.id,
+      user.role,
+    );
+  }
 }
+
 

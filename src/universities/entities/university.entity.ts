@@ -1,5 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
-// import { Restaurant } from 'src/restaurants/entities/restaurant.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Restaurant } from '../../restaurants/entities/restaurant.entity';
 
 @Entity('universities')
 export class University {
@@ -15,9 +15,8 @@ export class University {
   @Column({ length: 500, nullable: true })
   imagen?: string;
 
-  // Relación con Restaurant - se activará en Fase 2
-  // @OneToMany(() => Restaurant, (restaurant) => restaurant.university)
-  // restaurants: Restaurant[];
+  @OneToMany(() => Restaurant, (restaurant) => restaurant.university)
+  restaurants: Restaurant[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

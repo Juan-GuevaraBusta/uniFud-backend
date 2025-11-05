@@ -3,8 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Dish, DishType } from './entities/dish.entity';
 import { Topping } from './entities/topping.entity';
+import { DishAvailability } from './entities/dish-availability.entity';
 import { CreateDishDto } from './dto/create-dish.dto';
 import { UpdateDishDto } from './dto/update-dish.dto';
+import { BulkUpdateAvailabilityDto } from './dto/update-availability.dto';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { UserRole } from '../users/entities/user.entity';
 
@@ -15,6 +17,8 @@ export class DishesService {
     private readonly dishRepository: Repository<Dish>,
     @InjectRepository(Topping)
     private readonly toppingRepository: Repository<Topping>,
+    @InjectRepository(DishAvailability)
+    private readonly availabilityRepository: Repository<DishAvailability>,
     private readonly restaurantsService: RestaurantsService,
   ) {}
 
@@ -286,6 +290,155 @@ export class DishesService {
       .leftJoinAndSelect('dish.toppings', 'toppings')
       .orderBy('dish.nombre', 'ASC')
       .getMany();
+  }
+
+  // ==================== MÉTODOS DE DISPONIBILIDAD ====================
+
+  /**
+   * Actualizar disponibilidad de un plato
+   */
+  async updateAvailability(
+    dishId: string,
+    restaurantId: string,
+    disponible: boolean,
+    userId: string,
+    userRole: string,
+  ): Promise<DishAvailability> {
+    // Verificar que el plato existe
+    const dish = await this.findOne(dishId);
+
+    // Verificar que el plato pertenece al restaurante
+    if (dish.restaurantId !== restaurantId) {
+      throw new BadRequestException('El plato no pertenece a este restaurante');
+    }
+
+    // Verificar permisos
+    const restaurant = await this.restaurantsService.findOne(restaurantId);
+    
+    if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('Solo el dueño del restaurante puede actualizar la disponibilidad');
+    }
+
+    // Buscar disponibilidad existente
+    let availability = await this.availabilityRepository.findOne({
+      where: { dishId, restaurantId },
+    });
+
+    if (availability) {
+      // Actualizar existente
+      availability.disponible = disponible;
+    } else {
+      // Crear nueva
+      availability = this.availabilityRepository.create({
+        dishId,
+        restaurantId,
+        disponible,
+      });
+    }
+
+    return await this.availabilityRepository.save(availability);
+  }
+
+  /**
+   * Obtener disponibilidad de todos los platos de un restaurante
+   */
+  async getRestaurantAvailability(restaurantId: string): Promise<DishAvailability[]> {
+    // Verificar que el restaurante existe
+    await this.restaurantsService.findOne(restaurantId);
+
+    return await this.availabilityRepository.find({
+      where: { restaurantId },
+      relations: ['dish'],
+      order: {
+        updatedAt: 'DESC',
+      },
+    });
+  }
+
+  /**
+   * Verificar si un plato está disponible
+   */
+  async checkAvailability(dishId: string, restaurantId: string): Promise<boolean> {
+    const availability = await this.availabilityRepository.findOne({
+      where: { dishId, restaurantId },
+    });
+
+    // Si no hay registro de disponibilidad, asumimos que está disponible
+    return availability ? availability.disponible : true;
+  }
+
+  /**
+   * Actualización masiva de disponibilidad
+   */
+  async bulkUpdateAvailability(
+    restaurantId: string,
+    bulkUpdateDto: BulkUpdateAvailabilityDto,
+    userId: string,
+    userRole: string,
+  ): Promise<{ updated: number; results: DishAvailability[] }> {
+    // Verificar permisos
+    const restaurant = await this.restaurantsService.findOne(restaurantId);
+    
+    if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('Solo el dueño del restaurante puede actualizar la disponibilidad');
+    }
+
+    const results: DishAvailability[] = [];
+
+    for (const change of bulkUpdateDto.changes) {
+      // Verificar que el plato existe y pertenece al restaurante
+      const dish = await this.dishRepository.findOne({
+        where: { id: change.dishId, restaurantId },
+      });
+
+      if (!dish) {
+        // Omitir platos que no existen o no pertenecen al restaurante
+        continue;
+      }
+
+      // Buscar o crear disponibilidad
+      let availability = await this.availabilityRepository.findOne({
+        where: { dishId: change.dishId, restaurantId },
+      });
+
+      if (availability) {
+        availability.disponible = change.disponible;
+      } else {
+        availability = this.availabilityRepository.create({
+          dishId: change.dishId,
+          restaurantId,
+          disponible: change.disponible,
+        });
+      }
+
+      const saved = await this.availabilityRepository.save(availability);
+      results.push(saved);
+    }
+
+    return {
+      updated: results.length,
+      results,
+    };
+  }
+
+  /**
+   * Obtener menú con disponibilidad incluida
+   */
+  async getMenuWithAvailability(restaurantId: string): Promise<any[]> {
+    const dishes = await this.findByRestaurant(restaurantId);
+    const availabilities = await this.getRestaurantAvailability(restaurantId);
+
+    // Crear mapa de disponibilidad para lookup rápido
+    const availabilityMap = new Map<string, boolean>();
+    for (const av of availabilities) {
+      availabilityMap.set(av.dishId, av.disponible);
+    }
+
+    // Agregar disponibilidad a cada plato
+    return dishes.map(dish => ({
+      ...dish,
+      disponible: availabilityMap.get(dish.id) ?? true, // Default: disponible
+    }));
   }
 }
 
