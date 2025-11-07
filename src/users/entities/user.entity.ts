@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, BeforeUpdate, OneToMany } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import {Exclude} from 'class-transformer';
+import { Order } from '../../orders/entities/order.entity';
 
 export enum UserRole {
     STUDENT = 'student',
@@ -38,6 +39,9 @@ export class User {
 
     @Column({ type: 'timestamp' })
     verificationCodeExpiry?: Date;
+
+    @OneToMany(() => Order, (order) => order.user)
+    orders: Order[];
 
     @CreateDateColumn()
     createdAt: Date;

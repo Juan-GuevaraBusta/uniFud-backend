@@ -27,3 +27,4 @@ export class UpdateRestaurantDto extends PartialType(CreateRestaurantDto) {
   calificacion?: number;
 }
 
+

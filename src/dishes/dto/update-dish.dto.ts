@@ -15,3 +15,4 @@ export class UpdateDishDto extends PartialType(
   activo?: boolean;
 }
 
+

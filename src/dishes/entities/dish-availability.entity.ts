@@ -31,3 +31,4 @@ export class DishAvailability {
   restaurant: Restaurant;
 }
 
+

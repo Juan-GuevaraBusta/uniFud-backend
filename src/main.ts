@@ -48,6 +48,7 @@ async function bootstrap() {
      .addTag('Universidades', 'Gestión de universidades')
      .addTag('Restaurantes', 'Gestión de restaurantes')
      .addTag('Platos', 'Gestión de platos y menús')
+     .addTag('Pedidos', 'Gestión de pedidos')
      .addBearerAuth()
      .build();
    

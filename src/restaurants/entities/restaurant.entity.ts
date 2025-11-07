@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { University } from '../../universities/entities/university.entity';
 import { User } from '../../users/entities/user.entity';
 import { Dish } from '../../dishes/entities/dish.entity';
+import { Order } from '../../orders/entities/order.entity';
 
 @Entity('restaurants')
 @Index(['nombre', 'university'], { unique: true }) // Un restaurante único por universidad
@@ -45,8 +46,8 @@ export class Restaurant {
   @OneToMany(() => Dish, (dish) => dish.restaurant)
   dishes: Dish[];
   
-  // @OneToMany(() => Order, (order) => order.restaurant)
-  // orders: Order[];
+  @OneToMany(() => Order, (order) => order.restaurant)
+  orders: Order[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
