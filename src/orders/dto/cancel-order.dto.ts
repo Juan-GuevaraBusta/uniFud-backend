@@ -18,3 +18,5 @@ export class CancelOrderDto {
   @IsString({ message: 'Los comentarios deben ser un texto' })
   comentariosRestaurante?: string;
 }
+
+

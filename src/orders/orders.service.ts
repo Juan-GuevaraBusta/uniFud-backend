@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order, OrderStatus } from './entities/order.entity';
@@ -8,6 +8,12 @@ import { RestaurantsService } from '../restaurants/restaurants.service';
 import { DishesService } from '../dishes/dishes.service';
 import { OrderItemDto } from './dto/order-item.dto';
 import { UserRole } from '../users/entities/user.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
+import { BusinessException } from '../common/exceptions/business-exception';
+import { ForbiddenAccessException } from '../common/exceptions/unauthorized-exception';
+import { ResourceNotFoundException } from '../common/exceptions/not-found-exception';
 
 @Injectable()
 export class OrdersService {
@@ -16,6 +22,7 @@ export class OrdersService {
     private readonly orderRepository: Repository<Order>,
     private readonly restaurantsService: RestaurantsService,
     private readonly dishesService: DishesService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private readonly statusTransitions: Record<OrderStatus, OrderStatus[]> = {
@@ -35,7 +42,9 @@ export class OrdersService {
     const restaurant = await this.restaurantsService.findOne(createOrderDto.restaurantId);
     
     if (!restaurant.activo) {
-      throw new BadRequestException('El restaurante no está activo en este momento');
+      throw new BusinessException('El restaurante no está activo en este momento', 'RESTAURANT_INACTIVE', {
+        restaurantId: restaurant.id,
+      });
     }
 
     // 2. Verificar que el usuario no tenga un pedido PENDIENTE en el mismo restaurante
@@ -48,8 +57,13 @@ export class OrdersService {
     });
 
     if (pendingOrder) {
-      throw new ConflictException(
-        'Ya tienes un pedido pendiente en este restaurante. Espera a que sea procesado.'
+      throw new BusinessException(
+        'Ya tienes un pedido pendiente en este restaurante. Espera a que sea procesado.',
+        'ORDER_ALREADY_PENDING',
+        {
+          orderId: pendingOrder.id,
+          restaurantId: createOrderDto.restaurantId,
+        },
       );
     }
 
@@ -61,8 +75,13 @@ export class OrdersService {
       );
 
       if (!isAvailable) {
-        throw new BadRequestException(
-          `El plato "${item.dishNombre}" no está disponible en este momento`
+        throw new BusinessException(
+          `El plato "${item.dishNombre}" no está disponible en este momento`,
+          'DISH_NOT_AVAILABLE',
+          {
+            dishId: item.dishId,
+            restaurantId: createOrderDto.restaurantId,
+          },
         );
       }
 
@@ -70,14 +89,23 @@ export class OrdersService {
       const dish = await this.dishesService.findOne(item.dishId);
       
       if (dish.restaurantId !== createOrderDto.restaurantId) {
-        throw new BadRequestException(
-          `El plato "${item.dishNombre}" no pertenece a este restaurante`
+        throw new BusinessException(
+          `El plato "${item.dishNombre}" no pertenece a este restaurante`,
+          'DISH_RESTAURANT_MISMATCH',
+          {
+            dishId: item.dishId,
+            restaurantId: createOrderDto.restaurantId,
+          },
         );
       }
 
       if (!dish.activo) {
-        throw new BadRequestException(
-          `El plato "${item.dishNombre}" no está activo`
+        throw new BusinessException(
+          `El plato "${item.dishNombre}" no está activo`,
+          'DISH_INACTIVE',
+          {
+            dishId: item.dishId,
+          },
         );
       }
     }
@@ -101,8 +129,11 @@ export class OrdersService {
 
     // 7. Guardar y retornar con relaciones
     const savedOrder = await this.orderRepository.save(order);
+    const fullOrder = await this.findOne(savedOrder.id);
 
-    return await this.findOne(savedOrder.id);
+    await this.notificationsService.notifyNewOrder(fullOrder);
+
+    return fullOrder;
   }
 
   /**
@@ -150,13 +181,16 @@ export class OrdersService {
   /**
    * Obtener todos los pedidos con filtros opcionales
    */
-  async findAll(filters?: {
-    status?: OrderStatus;
-    restaurantId?: string;
-    userId?: string;
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<Order[]> {
+  async findAll(
+    filters?: {
+      status?: OrderStatus;
+      restaurantId?: string;
+      userId?: string;
+      startDate?: Date;
+      endDate?: Date;
+    },
+    pagination?: PaginationDto,
+  ): Promise<PaginatedResponse<Order>> {
     const query = this.orderRepository.createQueryBuilder('order');
 
     if (filters?.status) {
@@ -185,7 +219,13 @@ export class OrdersService {
       .leftJoinAndSelect('order.restaurant', 'restaurant')
       .orderBy('order.fechaPedido', 'DESC');
 
-    return await query.getMany();
+    if (pagination) {
+      query.skip(pagination.skip).take(pagination.take);
+    }
+
+    const [items, total] = await query.getManyAndCount();
+
+    return this.buildPaginatedResponse(items, total, pagination);
   }
 
   /**
@@ -198,7 +238,7 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException(`Pedido con ID ${id} no encontrado`);
+      throw new ResourceNotFoundException('Pedido', { id });
     }
 
     return order;
@@ -207,14 +247,18 @@ export class OrdersService {
   /**
    * Obtener pedidos de un usuario
    */
-  async findByUser(userId: string): Promise<Order[]> {
-    return await this.orderRepository.find({
+  async findByUser(userId: string, pagination?: PaginationDto): Promise<PaginatedResponse<Order>> {
+    const [items, total] = await this.orderRepository.findAndCount({
       where: { userId },
       relations: ['restaurant'],
       order: {
         fechaPedido: 'DESC',
       },
+      skip: pagination ? pagination.skip : undefined,
+      take: pagination ? pagination.take : undefined,
     });
+
+    return this.buildPaginatedResponse(items, total, pagination);
   }
 
   /**
@@ -225,12 +269,13 @@ export class OrdersService {
     status?: OrderStatus,
     actorId?: string,
     actorRole?: string,
-  ): Promise<Order[]> {
+    pagination?: PaginationDto,
+  ): Promise<PaginatedResponse<Order>> {
     if (actorRole && actorRole !== UserRole.ADMIN) {
       const restaurant = await this.restaurantsService.findOne(restaurantId);
 
       if (restaurant.ownerId !== actorId) {
-        throw new ForbiddenException('No tienes permisos para ver los pedidos de este restaurante');
+        throw new ForbiddenAccessException('No tienes permisos para ver los pedidos de este restaurante', 'RESTAURANT_ORDERS_FORBIDDEN');
       }
     }
 
@@ -240,13 +285,17 @@ export class OrdersService {
       where.status = status;
     }
 
-    return await this.orderRepository.find({
+    const [items, total] = await this.orderRepository.findAndCount({
       where,
       relations: ['user'],
       order: {
         fechaPedido: 'ASC', // Más antiguos primero para que vean lo urgente
       },
+      skip: pagination ? pagination.skip : undefined,
+      take: pagination ? pagination.take : undefined,
     });
+
+    return this.buildPaginatedResponse(items, total, pagination);
   }
 
   /**
@@ -282,36 +331,41 @@ export class OrdersService {
     actorRole: string,
   ): Promise<Order> {
     if (updateStatusDto.status === OrderStatus.CANCELADO) {
-      throw new BadRequestException('Para cancelar un pedido utiliza el endpoint de cancelación');
+      throw new BusinessException('Para cancelar un pedido utiliza el endpoint de cancelación', 'ORDER_STATUS_USE_CANCEL_ENDPOINT');
     }
 
     const order = await this.findOne(orderId);
     const restaurant = await this.restaurantsService.findOne(order.restaurantId);
 
     if (actorRole !== UserRole.ADMIN && restaurant.ownerId !== actorId) {
-      throw new ForbiddenException('No tienes permisos para actualizar el estado de este pedido');
+      throw new ForbiddenAccessException('No tienes permisos para actualizar el estado de este pedido', 'ORDER_STATUS_FORBIDDEN');
     }
 
     if (order.status === OrderStatus.CANCELADO) {
-      throw new BadRequestException('El pedido está cancelado y no puede cambiar de estado');
+      throw new BusinessException('El pedido está cancelado y no puede cambiar de estado', 'ORDER_STATUS_ALREADY_CANCELLED');
     }
 
     if (order.status === OrderStatus.ENTREGADO) {
-      throw new BadRequestException('El pedido ya fue entregado');
+      throw new BusinessException('El pedido ya fue entregado', 'ORDER_STATUS_ALREADY_DELIVERED');
     }
 
     const allowedTransitions = this.statusTransitions[order.status] ?? [];
 
     if (!allowedTransitions.includes(updateStatusDto.status)) {
-      throw new BadRequestException(
+      throw new BusinessException(
         `Transición inválida: no se puede cambiar de ${order.status} a ${updateStatusDto.status}`,
+        'ORDER_STATUS_TRANSITION_INVALID',
+        {
+          currentStatus: order.status,
+          requestedStatus: updateStatusDto.status,
+        },
       );
     }
 
     switch (updateStatusDto.status) {
       case OrderStatus.ACEPTADO: {
         if (!updateStatusDto.tiempoEstimado) {
-          throw new BadRequestException('Debes proporcionar un tiempo estimado en minutos');
+          throw new BusinessException('Debes proporcionar un tiempo estimado en minutos', 'ORDER_ESTIMATE_REQUIRED');
         }
 
         order.fechaAceptado = new Date();
@@ -321,7 +375,7 @@ export class OrdersService {
 
       case OrderStatus.PREPARANDO: {
         if (order.status !== OrderStatus.ACEPTADO) {
-          throw new BadRequestException('El pedido debe haber sido aceptado antes de prepararse');
+          throw new BusinessException('El pedido debe haber sido aceptado antes de prepararse', 'ORDER_PREPARE_SEQUENCE');
         }
         break;
       }
@@ -352,7 +406,11 @@ export class OrdersService {
     }
 
     const saved = await this.orderRepository.save(order);
-    return await this.findOne(saved.id);
+    const fullOrder = await this.findOne(saved.id);
+
+    await this.notificationsService.notifyOrderStatusChange(fullOrder);
+
+    return fullOrder;
   }
 
   /**
@@ -368,35 +426,35 @@ export class OrdersService {
     const order = await this.findOne(orderId);
 
     if (order.status === OrderStatus.CANCELADO) {
-      throw new BadRequestException('El pedido ya está cancelado');
+      throw new BusinessException('El pedido ya está cancelado', 'ORDER_ALREADY_CANCELLED');
     }
 
     if (order.status === OrderStatus.ENTREGADO) {
-      throw new BadRequestException('No puedes cancelar un pedido que ya fue entregado');
+      throw new BusinessException('No puedes cancelar un pedido que ya fue entregado', 'ORDER_CANCEL_DELIVERED');
     }
 
     const motivoLimpio = motivo?.trim();
 
     if (!motivoLimpio) {
-      throw new BadRequestException('Debes proporcionar un motivo de cancelación');
+      throw new BusinessException('Debes proporcionar un motivo de cancelación', 'ORDER_CANCEL_REASON_REQUIRED');
     }
 
     if (actorRole === UserRole.STUDENT) {
       if (order.userId !== actorId) {
-        throw new ForbiddenException('No puedes cancelar pedidos de otros usuarios');
+        throw new ForbiddenAccessException('No puedes cancelar pedidos de otros usuarios', 'ORDER_CANCEL_FORBIDDEN');
       }
 
       if (order.status !== OrderStatus.PENDIENTE) {
-        throw new BadRequestException('Solo puedes cancelar pedidos pendientes');
+        throw new BusinessException('Solo puedes cancelar pedidos pendientes', 'ORDER_CANCEL_INVALID_STATUS');
       }
     } else if (actorRole === UserRole.RESTAURANT_OWNER) {
       const restaurant = await this.restaurantsService.findOne(order.restaurantId);
 
       if (restaurant.ownerId !== actorId) {
-        throw new ForbiddenException('No puedes cancelar pedidos de otros restaurantes');
+        throw new ForbiddenAccessException('No puedes cancelar pedidos de otros restaurantes', 'ORDER_CANCEL_FORBIDDEN');
       }
     } else if (actorRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('No tienes permisos para cancelar pedidos');
+      throw new ForbiddenAccessException('No tienes permisos para cancelar pedidos', 'ORDER_CANCEL_FORBIDDEN');
     }
 
     order.status = OrderStatus.CANCELADO;
@@ -409,7 +467,31 @@ export class OrdersService {
     order.tiempoEstimado = null;
 
     const saved = await this.orderRepository.save(order);
-    return await this.findOne(saved.id);
+    const fullOrder = await this.findOne(saved.id);
+
+    await this.notificationsService.notifyOrderCancelled(fullOrder, actorRole);
+
+    return fullOrder;
+  }
+
+  private buildPaginatedResponse<T>(
+    items: T[],
+    total: number,
+    pagination?: PaginationDto,
+  ): PaginatedResponse<T> {
+    const computedLimit = pagination?.limit ?? (total > 0 ? total : 1);
+    const limit = Math.min(Math.max(computedLimit, 1), 1000);
+    const page = pagination?.page ?? 1;
+
+    return {
+      items,
+      meta: {
+        total,
+        limit,
+        page,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 }
 

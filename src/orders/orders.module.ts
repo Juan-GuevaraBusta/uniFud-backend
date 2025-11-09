@@ -5,16 +5,18 @@ import { Order } from './entities/order.entity';
 import { RestaurantsModule } from '../restaurants/restaurants.module';
 import { DishesModule } from '../dishes/dishes.module';
 import { OrdersController } from './orders.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order]),
-    RestaurantsModule, // Para verificar restaurante
-    DishesModule,      // Para validar disponibilidad de platos
+    RestaurantsModule,
+    DishesModule,
+    NotificationsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],
-  exports: [OrdersService], // Para que otros módulos puedan usarlo
+  exports: [OrdersService],
 })
 export class OrdersModule {}
 

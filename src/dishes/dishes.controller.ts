@@ -11,6 +11,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/entities/user.entity';
 import { CreateToppingDto } from './dto/create-topping.dto';
+import { DishesQueryDto } from './dto/dishes-query.dto';
 
 @ApiTags('Platos')
 @Controller('dishes')
@@ -59,46 +60,37 @@ export class DishesController {
     description: 'Obtiene todos los platos activos. Puede filtrar por restaurante o categoría.',
   })
   @ApiQuery({
-    name: 'restaurantId',
+    name: 'page',
     required: false,
-    description: 'Filtrar por ID de restaurante',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Número de página (por defecto 1)',
+    example: 1,
   })
   @ApiQuery({
-    name: 'categoria',
+    name: 'limit',
     required: false,
-    description: 'Filtrar por categoría',
-    example: 'Pizza',
-  })
-  @ApiQuery({
-    name: 'search',
-    required: false,
-    description: 'Buscar platos por nombre',
-    example: 'Pizza',
+    description: 'Tamaño de página (por defecto 20, máximo 100)',
+    example: 20,
   })
   @ApiResponse({
     status: 200,
-    description: 'Lista de platos',
-    type: [DishResponseDto],
+    description: 'Lista de platos paginada',
   })
-  async findAll(
-    @Query('restaurantId') restaurantId?: string,
-    @Query('categoria') categoria?: string,
-    @Query('search') search?: string,
-  ) {
+  async findAll(@Query() query: DishesQueryDto) {
+    const { restaurantId, categoria, search } = query;
+
     if (search) {
-      return await this.dishesService.search(search);
+      return await this.dishesService.search(search, query);
     }
-    
+
     if (restaurantId) {
-      return await this.dishesService.findByRestaurant(restaurantId);
+      return await this.dishesService.findByRestaurant(restaurantId, query);
     }
-    
+
     if (categoria) {
-      return await this.dishesService.findByCategory(categoria);
+      return await this.dishesService.findByCategory(categoria, query);
     }
-    
-    return await this.dishesService.findAll();
+
+    return await this.dishesService.findAll(query);
   }
 
   /**

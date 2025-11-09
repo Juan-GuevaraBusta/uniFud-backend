@@ -4,6 +4,9 @@ import { AppModule } from './app.module';
 import { getCorsConfig } from './config/cors.config';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -38,6 +41,9 @@ async function bootstrap() {
      }),
    );
 
+   app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
+   app.useGlobalFilters(new AllExceptionsFilter());
+
    // Configuración de Swagger
    const config = new DocumentBuilder()
      .setTitle('UniFoodApp API')
@@ -49,6 +55,7 @@ async function bootstrap() {
      .addTag('Restaurantes', 'Gestión de restaurantes')
      .addTag('Platos', 'Gestión de platos y menús')
      .addTag('Pedidos', 'Gestión de pedidos')
+     .addTag('Notificaciones', 'Gestión de tokens y envío de notificaciones push')
      .addBearerAuth()
      .build();
    

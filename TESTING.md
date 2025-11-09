@@ -25,6 +25,35 @@ El servidor iniciará en:
 
 ---
 
+## Formato de Respuestas Globales
+
+- **Éxito**: todas las respuestas pasan por el `TransformInterceptor`, por lo que verás el formato:
+
+```json
+{
+  "success": true,
+  "data": { "...": "payload" },
+  "timestamp": "2025-11-09T15:30:00.000Z"
+}
+```
+
+- **Errores**: cualquier excepción es capturada por `AllExceptionsFilter` y devuelve:
+
+```json
+{
+  "success": false,
+  "message": "Detalle legible para humanos",
+  "statusCode": 422,
+  "errorCode": "IDENTIFICADOR_OPCIONAL",
+  "timestamp": "2025-11-09T15:31:00.000Z",
+  "path": "/ruta/solicitada"
+}
+```
+
+> Los logs detallados de cada request se registran con el `LoggingInterceptor` (método, URL, usuario, tiempo de respuesta).
+
+---
+
 ## Testing de Autenticación
 
 ### 1. Registro de Usuario
@@ -213,6 +242,233 @@ Para rutas protegidas:
 
 ---
 
+## Testing de Pedidos (Días 7-8)
+
+> Asegúrate de contar con:
+> - Un usuario **student** autenticado (token JWT)
+> - Un restaurante activo y al menos un plato disponible
+> - El ID del restaurante (`restaurantId`) y del plato (`dishId`)
+
+### Parámetros de paginación
+
+Todos los listados (`GET /orders`, `GET /orders/restaurant/:id`) aceptan `page` y `limit` (por defecto 1 y 20, máximo 100). Ejemplo: `GET /orders?page=2&limit=10&status=preparando`.
+
+### 1. Crear un pedido (estudiante)
+
+**Endpoint**: `POST /orders`
+
+```bash
+curl -X POST http://localhost:3000/orders \
+  -H "Authorization: Bearer $ACCESS_TOKEN_STUDENT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "restaurantId": "RESTAURANT_UUID",
+    "items": [
+      {
+        "dishId": "DISH_UUID",
+        "dishNombre": "Pizza Margarita",
+        "cantidad": 2,
+        "precioUnitario": 18000,
+        "precioTotal": 36000,
+        "toppingsSeleccionados": [
+          { "id": "TOPPING_UUID", "nombre": "Queso extra", "precio": 2000 }
+        ],
+        "toppingsBaseRemocionados": [
+          { "id": "BASE_TOPPING_UUID", "nombre": "Cebolla" }
+        ],
+        "comentarios": "Sin sal, por favor"
+      }
+    ],
+    "comentariosCliente": "Entregar en recepción"
+  }'
+```
+
+### 2. Listar pedidos del estudiante
+
+```bash
+curl -X GET "http://localhost:3000/orders?page=1&limit=10" \
+  -H "Authorization: Bearer $ACCESS_TOKEN_STUDENT"
+```
+
+### 3. Listar pedidos de un restaurante (propietario)
+
+```bash
+curl -X GET "http://localhost:3000/orders/restaurant/RESTAURANT_UUID?status=pendiente&page=1&limit=10" \
+  -H "Authorization: Bearer $ACCESS_TOKEN_OWNER"
+```
+
+### 4. Avanzar estado de un pedido (restaurante)
+
+```bash
+curl -X PATCH http://localhost:3000/orders/PEDIDO_UUID/status \
+  -H "Authorization: Bearer $ACCESS_TOKEN_OWNER" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "aceptado",
+    "tiempoEstimado": 20,
+    "comentarios": "El pedido estará listo en 20 minutos"
+  }'
+```
+
+Estados permitidos y transiciones:
+
+```
+PENDIENTE -> ACEPTADO -> PREPARANDO -> LISTO -> ENTREGADO
+            \                          \
+             \__________________________> CANCELADO (solo restaurante/admin)
+PENDIENTE --------------------------------> CANCELADO (también estudiante)
+```
+
+### 5. Cancelar un pedido
+
+- **Estudiante**: solo pedidos `pendiente`
+- **Restaurante/Admin**: cualquier estado excepto `entregado`
+
+```bash
+curl -X PATCH http://localhost:3000/orders/PEDIDO_UUID/cancel \
+  -H "Authorization: Bearer $ACCESS_TOKEN_OWNER" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "motivo": "No hay ingredientes disponibles",
+    "comentariosRestaurante": "Te contactaremos para ofrecer alternativas"
+  }'
+```
+
+### 6. Validaciones y escenarios edge
+
+- **Pedido duplicado pendiente**: intenta crear dos pedidos seguidos en el mismo restaurante. La API debe responder `errorCode: ORDER_ALREADY_PENDING`.
+- **Categoría no válida**: crea/actualiza un plato con una categoría que el restaurante no posee; obtendrás `DISH_CATEGORY_INVALID`.
+- **Estado inválido**: fuerza una transición no permitida (`LISTO -> ACEPTADO`) y confirma el error `ORDER_STATUS_TRANSITION_INVALID`.
+- **Cancelación sin motivo**: envía `motivo` vacío y verifica el error `ORDER_CANCEL_REASON_REQUIRED`.
+- **Restaurante inactivo**: desactiva un restaurante y trata de crear un pedido; espera `RESTAURANT_INACTIVE`.
+
+---
+
+## Testing de Platos (Día 5-6 + refinamientos)
+
+### 1. Listar platos con paginación
+
+```bash
+curl -X GET "http://localhost:3000/dishes?page=1&limit=12" \
+  -H "Content-Type: application/json"
+```
+
+- `restaurantId`, `categoria` y `search` pueden combinarse con `page/limit`.
+- La respuesta incluye `data.items` y `data.meta` (total, página, totalPages).
+
+### 2. Búsqueda pública con paginación
+
+```bash
+curl -X GET "http://localhost:3000/dishes?search=pizza&page=1&limit=5"
+```
+
+### 3. Validaciones clave
+
+- Precio mayor a 1.000.000 → `DISH_PRICE_OUT_OF_RANGE`.
+- Categoría fuera del catálogo del restaurante → `DISH_CATEGORY_INVALID`.
+- Intentar actualizar disponibilidad desde otra cuenta → `DISH_AVAILABILITY_FORBIDDEN`.
+
+---
+
+## Testing de Usuarios (Admin)
+
+Solo los administradores pueden consultar el listado global.
+
+```bash
+curl -X GET "http://localhost:3000/users?page=1&limit=25" \
+  -H "Authorization: Bearer $ACCESS_TOKEN_ADMIN"
+```
+
+La respuesta incluye metadatos de paginación (`items`, `meta.total`, `meta.totalPages`).
+
+---
+
+## Testing de Notificaciones (Día 9)
+
+Estas rutas gestionan los tokens Expo Push de los dispositivos.
+
+### 1. Registrar/actualizar token del dispositivo
+
+```bash
+curl -X POST http://localhost:3000/notifications/register \
+  -H "Authorization: Bearer $ACCESS_TOKEN_USUARIO" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "expoPushToken": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
+    "deviceId": "iPhone 15 Pro",
+    "platform": "ios",
+    "deviceInfo": {
+      "deviceName": "iPhone de Juan",
+      "modelName": "iPhone 15 Pro",
+      "osName": "iOS",
+      "osVersion": "18.1"
+    },
+    "configuraciones": {
+      "pedidosNuevos": true,
+      "cambiosEstado": true,
+      "promociones": false
+    }
+  }'
+```
+
+### 2. Listar tokens activos del usuario
+
+```bash
+curl -X GET http://localhost:3000/notifications/me \
+  -H "Authorization: Bearer $ACCESS_TOKEN_USUARIO"
+```
+
+### 3. Actualizar preferencias o activar/desactivar un token específico
+
+```bash
+curl -X PATCH http://localhost:3000/notifications/TOKEN_UUID \
+  -H "Authorization: Bearer $ACCESS_TOKEN_USUARIO" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "configuraciones": {
+      "pedidosNuevos": false,
+      "cambiosEstado": true,
+      "promociones": false
+    }
+  }'
+```
+
+### 4. Desactivar un token (logout desde dispositivo)
+
+```bash
+curl -X DELETE http://localhost:3000/notifications/TOKEN_UUID \
+  -H "Authorization: Bearer $ACCESS_TOKEN_USUARIO"
+```
+
+### 5. Desactivar todos los tokens del usuario (logout global)
+
+```bash
+curl -X DELETE http://localhost:3000/notifications \
+  -H "Authorization: Bearer $ACCESS_TOKEN_USUARIO"
+```
+
+### 6. Enviar notificación manual (solo admin/restaurante)
+
+```bash
+curl -X POST http://localhost:3000/notifications/send \
+  -H "Authorization: Bearer $ACCESS_TOKEN_OWNER_O_ADMIN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipients": ["estudiante@universidadean.edu.co"],
+    "type": "nuevo_pedido",
+    "title": "🍽️ Nuevo pedido recibido",
+    "body": "Pedido #ABC-123 por $25.000",
+    "data": {
+      "pedidoId": "PEDIDO_UUID",
+      "numeroOrden": "#ABC-123"
+    }
+  }'
+```
+
+> ⚠️ **Nota:** además de este endpoint manual, la API envía notificaciones automáticas cuando se crean pedidos, cambian de estado o se cancelan. Asegúrate de tener tokens registrados para el restaurante y el usuario antes de probar esos flujos.
+
+---
+
 ## Usuarios de Prueba
 
 ### Estudiante
@@ -320,7 +576,8 @@ NODE_ENV=development
 
 ---
 
-**Última actualización**: Día 3 completado
+**Última actualización**: Día 10 completado + refinamientos Día 11 (mañana)
 **Estado**: Sistema de autenticación completo y funcional ✅
+
 
 

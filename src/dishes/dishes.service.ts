@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindManyOptions, Repository } from 'typeorm';
 import { Dish, DishType } from './entities/dish.entity';
 import { Topping } from './entities/topping.entity';
 import { DishAvailability } from './entities/dish-availability.entity';
@@ -9,6 +9,11 @@ import { UpdateDishDto } from './dto/update-dish.dto';
 import { BulkUpdateAvailabilityDto } from './dto/update-availability.dto';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { UserRole } from '../users/entities/user.entity';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
+import { BusinessException } from '../common/exceptions/business-exception';
+import { ForbiddenAccessException } from '../common/exceptions/unauthorized-exception';
+import { ResourceNotFoundException } from '../common/exceptions/not-found-exception';
 
 @Injectable()
 export class DishesService {
@@ -30,7 +35,19 @@ export class DishesService {
     const restaurant = await this.restaurantsService.findOne(createDishDto.restaurantId);
     
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo el dueño del restaurante puede crear platos');
+      throw new ForbiddenAccessException('Solo el dueño del restaurante puede crear platos', 'DISH_CREATE_FORBIDDEN');
+    }
+
+    if (createDishDto.precio > 1_000_000) {
+      throw new BusinessException('El precio del plato no puede superar 1.000.000', 'DISH_PRICE_OUT_OF_RANGE');
+    }
+
+    const categories = restaurant.categorias?.map(cat => cat.trim().toLowerCase()) ?? [];
+    if (!categories.includes(createDishDto.categoria.trim().toLowerCase())) {
+      throw new BusinessException('La categoría indicada no está configurada en el restaurante', 'DISH_CATEGORY_INVALID', {
+        categoria: createDishDto.categoria,
+        restaurantId: restaurant.id,
+      });
     }
 
     // Validar toppings según tipo de plato
@@ -48,24 +65,33 @@ export class DishesService {
   /**
    * Obtener todos los platos activos
    */
-  async findAll(): Promise<Dish[]> {
-    return await this.dishRepository.find({
+  async findAll(pagination?: PaginationDto): Promise<PaginatedResponse<Dish>> {
+    const options: FindManyOptions<Dish> = {
       where: { activo: true },
       relations: ['restaurant', 'toppings'],
       order: {
         nombre: 'ASC',
       },
-    });
+    };
+
+    if (pagination) {
+      options.skip = pagination.skip;
+      options.take = pagination.take;
+    }
+
+    const [items, total] = await this.dishRepository.findAndCount(options);
+
+    return this.buildPaginatedResponse(items, total, pagination);
   }
 
   /**
    * Obtener platos por restaurante
    */
-  async findByRestaurant(restaurantId: string): Promise<Dish[]> {
+  async findByRestaurant(restaurantId: string, pagination?: PaginationDto): Promise<PaginatedResponse<Dish>> {
     // Verificar que el restaurante existe
     await this.restaurantsService.findOne(restaurantId);
 
-    return await this.dishRepository.find({
+    const options: FindManyOptions<Dish> = {
       where: {
         restaurantId,
         activo: true,
@@ -75,14 +101,23 @@ export class DishesService {
         categoria: 'ASC',
         nombre: 'ASC',
       },
-    });
+    };
+
+    if (pagination) {
+      options.skip = pagination.skip;
+      options.take = pagination.take;
+    }
+
+    const [items, total] = await this.dishRepository.findAndCount(options);
+
+    return this.buildPaginatedResponse(items, total, pagination);
   }
 
   /**
    * Obtener platos por categoría
    */
-  async findByCategory(categoria: string): Promise<Dish[]> {
-    return await this.dishRepository.find({
+  async findByCategory(categoria: string, pagination?: PaginationDto): Promise<PaginatedResponse<Dish>> {
+    const options: FindManyOptions<Dish> = {
       where: {
         categoria,
         activo: true,
@@ -91,7 +126,16 @@ export class DishesService {
       order: {
         nombre: 'ASC',
       },
-    });
+    };
+
+    if (pagination) {
+      options.skip = pagination.skip;
+      options.take = pagination.take;
+    }
+
+    const [items, total] = await this.dishRepository.findAndCount(options);
+
+    return this.buildPaginatedResponse(items, total, pagination);
   }
 
   /**
@@ -104,7 +148,7 @@ export class DishesService {
     });
 
     if (!dish) {
-      throw new NotFoundException(`Plato con ID ${id} no encontrado`);
+      throw new ResourceNotFoundException('Plato', { id });
     }
 
     return dish;
@@ -120,12 +164,26 @@ export class DishesService {
     const restaurant = await this.restaurantsService.findOne(dish.restaurantId);
     
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo el dueño del restaurante puede actualizar este plato');
+      throw new ForbiddenAccessException('Solo el dueño del restaurante puede actualizar este plato', 'DISH_UPDATE_FORBIDDEN');
     }
 
     // Validar precio si se proporciona
     if (updateDishDto.precio !== undefined && updateDishDto.precio < 1) {
       throw new BadRequestException('El precio debe ser mayor a 0');
+    }
+
+    if (updateDishDto.precio !== undefined && updateDishDto.precio > 1_000_000) {
+      throw new BusinessException('El precio del plato no puede superar 1.000.000', 'DISH_PRICE_OUT_OF_RANGE');
+    }
+
+    if (updateDishDto.categoria) {
+      const categories = restaurant.categorias?.map(cat => cat.trim().toLowerCase()) ?? [];
+      if (!categories.includes(updateDishDto.categoria.trim().toLowerCase())) {
+        throw new BusinessException('La categoría indicada no está configurada en el restaurante', 'DISH_CATEGORY_INVALID', {
+          categoria: updateDishDto.categoria,
+          restaurantId: restaurant.id,
+        });
+      }
     }
 
     // Aplicar cambios
@@ -144,7 +202,7 @@ export class DishesService {
     const restaurant = await this.restaurantsService.findOne(dish.restaurantId);
     
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo el dueño del restaurante puede eliminar este plato');
+      throw new ForbiddenAccessException('Solo el dueño del restaurante puede eliminar este plato', 'DISH_DELETE_FORBIDDEN');
     }
 
     await this.dishRepository.remove(dish);
@@ -160,7 +218,7 @@ export class DishesService {
     const restaurant = await this.restaurantsService.findOne(dish.restaurantId);
     
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('No tienes permisos para cambiar el estado de este plato');
+      throw new ForbiddenAccessException('No tienes permisos para cambiar el estado de este plato', 'DISH_STATUS_FORBIDDEN');
     }
 
     dish.activo = !dish.activo;
@@ -200,7 +258,7 @@ export class DishesService {
     const restaurant = await this.restaurantsService.findOne(dish.restaurantId);
     
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo el dueño del restaurante puede agregar toppings');
+      throw new ForbiddenAccessException('Solo el dueño del restaurante puede agregar toppings', 'DISH_TOPPING_FORBIDDEN');
     }
 
     const topping = this.toppingRepository.create({
@@ -223,7 +281,7 @@ export class DishesService {
     const restaurant = await this.restaurantsService.findOne(dish.restaurantId);
     
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo el dueño del restaurante puede eliminar toppings');
+      throw new ForbiddenAccessException('Solo el dueño del restaurante puede eliminar toppings', 'DISH_TOPPING_FORBIDDEN');
     }
 
     const topping = await this.toppingRepository.findOne({
@@ -231,7 +289,7 @@ export class DishesService {
     });
 
     if (!topping) {
-      throw new NotFoundException('Topping no encontrado');
+      throw new ResourceNotFoundException('Topping', { id: toppingId });
     }
 
     await this.toppingRepository.remove(topping);
@@ -264,7 +322,7 @@ export class DishesService {
         // Fijo: todos los toppings deben ser no removibles (ingredientes fijos)
         const hasRemovible = toppings.some(t => t.removible === true);
         if (hasRemovible) {
-          throw new BadRequestException('Los platos tipo FIJO no pueden tener ingredientes removibles');
+          throw new BusinessException('Los platos tipo FIJO no pueden tener ingredientes removibles', 'DISH_TOPPING_INVALID');
         }
         break;
 
@@ -274,22 +332,29 @@ export class DishesService {
         break;
 
       default:
-        throw new BadRequestException('Tipo de plato inválido');
+        throw new BusinessException('Tipo de plato inválido', 'DISH_TYPE_INVALID');
     }
   }
 
   /**
    * Buscar platos por nombre
    */
-  async search(query: string): Promise<Dish[]> {
-    return await this.dishRepository
+  async search(query: string, pagination?: PaginationDto): Promise<PaginatedResponse<Dish>> {
+    const qb = this.dishRepository
       .createQueryBuilder('dish')
       .where('dish.nombre ILIKE :query', { query: `%${query}%` })
       .andWhere('dish.activo = :activo', { activo: true })
       .leftJoinAndSelect('dish.restaurant', 'restaurant')
       .leftJoinAndSelect('dish.toppings', 'toppings')
-      .orderBy('dish.nombre', 'ASC')
-      .getMany();
+      .orderBy('dish.nombre', 'ASC');
+
+    if (pagination) {
+      qb.skip(pagination.skip).take(pagination.take);
+    }
+
+    const [items, total] = await qb.getManyAndCount();
+
+    return this.buildPaginatedResponse(items, total, pagination);
   }
 
   // ==================== MÉTODOS DE DISPONIBILIDAD ====================
@@ -316,7 +381,7 @@ export class DishesService {
     const restaurant = await this.restaurantsService.findOne(restaurantId);
     
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo el dueño del restaurante puede actualizar la disponibilidad');
+      throw new ForbiddenAccessException('Solo el dueño del restaurante puede actualizar la disponibilidad', 'DISH_AVAILABILITY_FORBIDDEN');
     }
 
     // Buscar disponibilidad existente
@@ -380,7 +445,7 @@ export class DishesService {
     const restaurant = await this.restaurantsService.findOne(restaurantId);
     
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo el dueño del restaurante puede actualizar la disponibilidad');
+      throw new ForbiddenAccessException('Solo el dueño del restaurante puede actualizar la disponibilidad', 'DISH_AVAILABILITY_FORBIDDEN');
     }
 
     const results: DishAvailability[] = [];
@@ -435,10 +500,30 @@ export class DishesService {
     }
 
     // Agregar disponibilidad a cada plato
-    return dishes.map(dish => ({
+    return dishes.items.map(dish => ({
       ...dish,
       disponible: availabilityMap.get(dish.id) ?? true, // Default: disponible
     }));
+  }
+
+  private buildPaginatedResponse<T>(
+    items: T[],
+    total: number,
+    pagination?: PaginationDto,
+  ): PaginatedResponse<T> {
+    const computedLimit = pagination?.limit ?? (total > 0 ? total : 1);
+    const limit = Math.min(Math.max(computedLimit, 1), 1000);
+    const page = pagination?.page ?? 1;
+
+    return {
+      items,
+      meta: {
+        total,
+        limit,
+        page,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 }
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Restaurant } from './entities/restaurant.entity';
@@ -6,6 +6,8 @@ import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { UniversitiesService } from '../universities/universities.service';
 import { UserRole } from '../users/entities/user.entity';
+import { ForbiddenAccessException } from '../common/exceptions/unauthorized-exception';
+import { ResourceNotFoundException } from '../common/exceptions/not-found-exception';
 
 @Injectable()
 export class RestaurantsService {
@@ -21,7 +23,7 @@ export class RestaurantsService {
   async create(createRestaurantDto: CreateRestaurantDto, ownerId: string, userRole: string): Promise<Restaurant> {
     // Validar que el usuario sea restaurant_owner
     if (userRole !== UserRole.RESTAURANT_OWNER && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo los propietarios de restaurantes pueden crear restaurantes');
+      throw new ForbiddenAccessException('Solo los propietarios de restaurantes pueden crear restaurantes', 'RESTAURANT_CREATE_FORBIDDEN');
     }
 
     // Verificar que la universidad exista
@@ -116,7 +118,7 @@ export class RestaurantsService {
     });
 
     if (!restaurant) {
-      throw new NotFoundException(`Restaurante con ID ${id} no encontrado`);
+      throw new ResourceNotFoundException('Restaurante', { id });
     }
 
     return restaurant;
@@ -130,7 +132,7 @@ export class RestaurantsService {
 
     // Verificar permisos: solo el dueño o un admin pueden actualizar
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('No tienes permisos para actualizar este restaurante');
+      throw new ForbiddenAccessException('No tienes permisos para actualizar este restaurante', 'RESTAURANT_UPDATE_FORBIDDEN');
     }
 
     // Si se actualiza el nombre o universidad, verificar unicidad
@@ -175,7 +177,7 @@ export class RestaurantsService {
 
     // Verificar permisos: solo el dueño o un admin pueden eliminar
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('No tienes permisos para eliminar este restaurante');
+      throw new ForbiddenAccessException('No tienes permisos para eliminar este restaurante', 'RESTAURANT_DELETE_FORBIDDEN');
     }
 
     await this.restaurantRepository.remove(restaurant);
@@ -189,7 +191,7 @@ export class RestaurantsService {
 
     // Verificar permisos
     if (restaurant.ownerId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('No tienes permisos para cambiar el estado de este restaurante');
+      throw new ForbiddenAccessException('No tienes permisos para cambiar el estado de este restaurante', 'RESTAURANT_STATUS_FORBIDDEN');
     }
 
     restaurant.activo = !restaurant.activo;
@@ -197,5 +199,7 @@ export class RestaurantsService {
     return await this.restaurantRepository.save(restaurant);
   }
 }
+
+
 
 

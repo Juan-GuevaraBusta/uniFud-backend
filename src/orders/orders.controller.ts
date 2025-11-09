@@ -5,12 +5,13 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { OrderStatus } from './entities/order.entity';
-import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/entities/user.entity';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { OrdersQueryDto } from './dto/orders-query.dto';
+import { OrdersRestaurantQueryDto } from './dto/orders-restaurant-query.dto';
 
 @ApiTags('Pedidos')
 @Controller('orders')
@@ -47,82 +48,52 @@ export class OrdersController {
     description: 'Retorna pedidos personalizados según el rol del usuario',
   })
   @ApiQuery({
-    name: 'status',
+    name: 'page',
     required: false,
-    enum: OrderStatus,
-    description: 'Filtrar por estado (solo propietario o admin)',
+    description: 'Número de página (por defecto 1)',
+    example: 1,
   })
   @ApiQuery({
-    name: 'restaurantId',
+    name: 'limit',
     required: false,
-    description: 'Obligatorio para propietarios de restaurantes',
-    example: '123e4567-e89b-12d3-a456-426614174000',
-  })
-  @ApiQuery({
-    name: 'startDate',
-    required: false,
-    description: 'Fecha inicial (ISO 8601) para filtros de admin',
-    example: '2025-11-05T00:00:00Z',
-  })
-  @ApiQuery({
-    name: 'endDate',
-    required: false,
-    description: 'Fecha final (ISO 8601) para filtros de admin',
-    example: '2025-11-05T23:59:59Z',
+    description: 'Resultados por página (por defecto 20)',
+    example: 20,
   })
   async findAll(
     @CurrentUser() user: any,
-    @Query('status') status?: OrderStatus,
-    @Query('restaurantId') restaurantId?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
+    @Query() query: OrdersQueryDto,
   ) {
-    if (status && !Object.values(OrderStatus).includes(status)) {
-      throw new BadRequestException('Estado inválido');
-    }
-
     if (user.role === UserRole.STUDENT) {
-      return await this.ordersService.findByUser(user.id);
+      return await this.ordersService.findByUser(user.id, query);
     }
 
     if (user.role === UserRole.RESTAURANT_OWNER) {
-      if (!restaurantId) {
+      if (!query.restaurantId) {
         throw new BadRequestException('Debes proporcionar el ID del restaurante');
       }
 
-      return await this.ordersService.findByRestaurant(restaurantId, status, user.id, user.role);
+      return await this.ordersService.findByRestaurant(
+        query.restaurantId,
+        query.status,
+        user.id,
+        user.role,
+        query,
+      );
     }
 
-    // Admin
-    const filters: {
-      status?: OrderStatus;
-      restaurantId?: string;
-      userId?: string;
-      startDate?: Date;
-      endDate?: Date;
-    } = {};
-
-    if (status) {
-      filters.status = status;
+    if (query.startDate && query.endDate && query.startDate > query.endDate) {
+      throw new BadRequestException('El rango de fechas es inválido (startDate > endDate)');
     }
 
-    if (restaurantId) {
-      filters.restaurantId = restaurantId;
-    }
-
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-        throw new BadRequestException('Rango de fechas inválido');
-      }
-
-      filters.startDate = start;
-      filters.endDate = end;
-    }
-
-    return await this.ordersService.findAll(filters);
+    return await this.ordersService.findAll(
+      {
+        status: query.status,
+        restaurantId: query.restaurantId,
+        startDate: query.startDate,
+        endDate: query.endDate,
+      },
+      query,
+    );
   }
 
   /**
@@ -169,25 +140,34 @@ export class OrdersController {
   })
   @ApiParam({ name: 'restaurantId', description: 'ID del restaurante' })
   @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Número de página (por defecto 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Resultados por página (por defecto 20)',
+    example: 20,
+  })
+  @ApiQuery({
     name: 'status',
     required: false,
     enum: OrderStatus,
-    description: 'Filtrar por estado',
+    description: 'Filtrar por estado del pedido',
   })
   async findByRestaurant(
     @Param('restaurantId') restaurantId: string,
-    @Query('status') status: OrderStatus,
+    @Query() query: OrdersRestaurantQueryDto,
     @CurrentUser() user: any,
   ) {
-    if (status && !Object.values(OrderStatus).includes(status)) {
-      throw new BadRequestException('Estado inválido');
-    }
-
     return await this.ordersService.findByRestaurant(
       restaurantId,
-      status,
+      query.status,
       user.id,
       user.role,
+      query,
     );
   }
 

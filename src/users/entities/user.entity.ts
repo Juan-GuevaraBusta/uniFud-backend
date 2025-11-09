@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import * as bcrypt from 'bcrypt';
 import {Exclude} from 'class-transformer';
 import { Order } from '../../orders/entities/order.entity';
+import { NotificationToken } from '../../notifications/entities/notification-token.entity';
 
 export enum UserRole {
     STUDENT = 'student',
@@ -42,6 +43,9 @@ export class User {
 
     @OneToMany(() => Order, (order) => order.user)
     orders: Order[];
+
+    @OneToMany(() => NotificationToken, (token) => token.user)
+    notificationTokens: NotificationToken[];
 
     @CreateDateColumn()
     createdAt: Date;
