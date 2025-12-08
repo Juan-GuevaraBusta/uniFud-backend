@@ -20,3 +20,4 @@ export class BusinessException extends HttpException {
     super(response, HttpStatus.UNPROCESSABLE_ENTITY);
   }
 }
+

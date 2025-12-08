@@ -28,3 +28,4 @@ export class PaginationDto {
     return this.limit ?? 20;
   }
 }
+

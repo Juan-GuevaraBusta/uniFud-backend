@@ -39,3 +39,4 @@ export class NotificationTokenResponseDto {
   lastUsedAt: Date;
 }
 
+

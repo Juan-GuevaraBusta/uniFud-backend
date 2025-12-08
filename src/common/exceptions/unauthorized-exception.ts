@@ -11,3 +11,4 @@ export class ForbiddenAccessException extends ForbiddenException {
     super({ message, errorCode, statusCode: HttpStatus.FORBIDDEN });
   }
 }
+

@@ -27,3 +27,4 @@ export class OrdersQueryDto extends PaginationDto {
   @IsDate({ message: 'endDate debe ser una fecha válida' })
   endDate?: Date;
 }
+

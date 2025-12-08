@@ -10,3 +10,4 @@ export class ResourceNotFoundException extends NotFoundException {
     });
   }
 }
+

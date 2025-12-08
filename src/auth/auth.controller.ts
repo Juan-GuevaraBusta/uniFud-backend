@@ -80,6 +80,17 @@ export class AuthController {
     }
   })
   @ApiResponse({ status: 400, description: 'Código inválido o expirado' })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async confirmEmail(@Body() confirmEmailDto: ConfirmEmailDto) {
     return this.authService.confirmEmail(confirmEmailDto);
   }
@@ -151,6 +162,17 @@ export class AuthController {
     }
   })
   @ApiResponse({ status: 401, description: 'Refresh token inválido o expirado' })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async refreshToken(@Body('refreshToken') refreshToken: string) {
     return this.authService.refreshToken(refreshToken);
   }
@@ -179,6 +201,17 @@ export class AuthController {
     }
   })
   @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async getProfile(@CurrentUser() user: any) {
     return user;
   }
@@ -203,6 +236,17 @@ export class AuthController {
       }
     }
   })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async logout(@CurrentUser() user: any) {
     // TODO: Implementar invalidación de tokens con Redis o blacklist
     // Por ahora, el logout se maneja en el cliente eliminando los tokens
@@ -211,6 +255,7 @@ export class AuthController {
     };
   }
 }
+
 
 
 

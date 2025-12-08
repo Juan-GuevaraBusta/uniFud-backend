@@ -19,3 +19,4 @@ export class DishesQueryDto extends PaginationDto {
   @IsString()
   search?: string;
 }
+

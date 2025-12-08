@@ -33,6 +33,27 @@ export class UniversitiesController {
     status: 400,
     description: 'Datos inválidos',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async create(@Body() createUniversityDto: CreateUniversityDto) {
     return await this.universitiesService.create(createUniversityDto);
   }
@@ -87,6 +108,17 @@ export class UniversitiesController {
     status: 404,
     description: 'Universidad no encontrada',
   })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async findOne(@Param('id') id: string) {
     return await this.universitiesService.findOne(id);
   }
@@ -113,8 +145,29 @@ export class UniversitiesController {
     description: 'Universidad no encontrada',
   })
   @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
     status: 409,
     description: 'Conflicto con nombre/ciudad',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async update(
     @Param('id') id: string,
@@ -141,8 +194,29 @@ export class UniversitiesController {
     description: 'Universidad eliminada exitosamente',
   })
   @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
     status: 404,
     description: 'Universidad no encontrada',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async remove(@Param('id') id: string) {
     await this.universitiesService.remove(id);

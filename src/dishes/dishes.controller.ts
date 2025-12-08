@@ -75,6 +75,28 @@ export class DishesController {
     status: 200,
     description: 'Lista de platos paginada',
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Parámetros de consulta inválidos',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['page debe ser un número entero', 'limit debe estar entre 1 y 100'],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async findAll(@Query() query: DishesQueryDto) {
     const { restaurantId, categoria, search } = query;
 
@@ -116,6 +138,17 @@ export class DishesController {
     status: 404,
     description: 'Restaurante no encontrado',
   })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async getRestaurantMenu(@Param('restaurantId') restaurantId: string) {
     return await this.dishesService.findByRestaurant(restaurantId);
   }
@@ -142,6 +175,17 @@ export class DishesController {
   @ApiResponse({
     status: 404,
     description: 'Plato no encontrado',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async findOne(@Param('id') id: string) {
     return await this.dishesService.findOne(id);
@@ -171,8 +215,40 @@ export class DishesController {
     description: 'No tienes permisos para actualizar este plato',
   })
   @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o validación fallida',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['precio debe ser un número positivo'],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
     status: 404,
     description: 'Plato no encontrado',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async update(
     @Param('id') id: string,
@@ -201,6 +277,49 @@ export class DishesController {
     description: 'Estado cambiado exitosamente',
     type: DishResponseDto,
   })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para modificar este plato',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para modificar este plato',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Plato no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Plato no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async toggleActive(
     @Param('id') id: string,
     @CurrentUser() user: any,
@@ -227,6 +346,60 @@ export class DishesController {
     status: 201,
     description: 'Topping agregado exitosamente',
     type: DishResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o topping no válido para el tipo de plato',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Los platos SIMPLE no pueden tener toppings',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para modificar este plato',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para modificar este plato',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Plato no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Plato no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async addTopping(
     @Param('id') dishId: string,
@@ -260,6 +433,49 @@ export class DishesController {
     description: 'Topping eliminado exitosamente',
     type: DishResponseDto,
   })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para modificar este plato',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para modificar este plato',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Plato o topping no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Topping no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async removeTopping(
     @Param('id') dishId: string,
     @Param('toppingId') toppingId: string,
@@ -292,8 +508,29 @@ export class DishesController {
     description: 'No tienes permisos para eliminar este plato',
   })
   @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
     status: 404,
     description: 'Plato no encontrado',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async remove(
     @Param('id') id: string,
@@ -327,6 +564,60 @@ export class DishesController {
     status: 200,
     description: 'Disponibilidad actualizada exitosamente',
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o restaurante no coincide',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'El plato no pertenece a este restaurante',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para actualizar la disponibilidad',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para actualizar la disponibilidad',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Plato o restaurante no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Plato no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async updateAvailability(
     @Param('id') dishId: string,
     @Query('restaurantId') restaurantId: string,
@@ -359,6 +650,28 @@ export class DishesController {
     status: 200,
     description: 'Lista de disponibilidades',
   })
+  @ApiResponse({
+    status: 404,
+    description: 'Restaurante no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Restaurante no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async getRestaurantAvailability(@Param('restaurantId') restaurantId: string) {
     return await this.dishesService.getRestaurantAvailability(restaurantId);
   }
@@ -379,6 +692,28 @@ export class DishesController {
   @ApiResponse({
     status: 200,
     description: 'Menú completo con disponibilidad',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Restaurante no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Restaurante no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async getMenuWithAvailability(@Param('restaurantId') restaurantId: string) {
     return await this.dishesService.getMenuWithAvailability(restaurantId);
@@ -406,6 +741,60 @@ export class DishesController {
         updated: 5,
         results: []
       }
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o array vacío',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'El array de actualizaciones no puede estar vacío',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para actualizar la disponibilidad',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para actualizar la disponibilidad',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Restaurante no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Restaurante no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
     },
   })
   async bulkUpdateAvailability(

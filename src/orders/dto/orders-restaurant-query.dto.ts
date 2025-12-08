@@ -9,3 +9,4 @@ export class OrdersRestaurantQueryDto extends PaginationDto {
   @IsEnum(OrderStatus)
   status?: OrderStatus;
 }
+

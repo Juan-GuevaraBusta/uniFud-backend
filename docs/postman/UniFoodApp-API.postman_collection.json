@@ -1,0 +1,1508 @@
+{
+	"info": {
+		"_postman_id": "unifood-api-collection",
+		"name": "UniFoodApp API",
+		"description": "Colección completa de endpoints para la API de UniFoodApp - Sistema de pedidos universitarios",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "unifood-backend"
+	},
+	"item": [
+		{
+			"name": "Autenticación",
+			"item": [
+				{
+					"name": "Registro",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.userId) {",
+									"        pm.environment.set(\"user_id\", response.userId);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"estudiante@universidadean.edu.co\",\n  \"password\": \"Password123!\",\n  \"nombre\": \"Juan Pérez\",\n  \"role\": \"student\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						},
+						"description": "Registra un nuevo usuario en el sistema"
+					},
+					"response": []
+				},
+				{
+					"name": "Confirmar Email",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"estudiante@universidadean.edu.co\",\n  \"code\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/confirm-email",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "confirm-email"]
+						},
+						"description": "Confirma el email del usuario con el código de verificación"
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.accessToken) {",
+									"        pm.environment.set(\"access_token\", response.data.accessToken);",
+									"        pm.environment.set(\"refresh_token\", response.data.refreshToken);",
+									"        pm.environment.set(\"user_id\", response.data.user.id);",
+									"        pm.environment.set(\"user_role\", response.data.user.role);",
+									"    } else if (response.accessToken) {",
+									"        pm.environment.set(\"access_token\", response.accessToken);",
+									"        pm.environment.set(\"refresh_token\", response.refreshToken);",
+									"        pm.environment.set(\"user_id\", response.user.id);",
+									"        pm.environment.set(\"user_role\", response.user.role);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"estudiante@universidadean.edu.co\",\n  \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "Inicia sesión y obtiene tokens JWT"
+					},
+					"response": []
+				},
+				{
+					"name": "Reenviar Código",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"estudiante@universidadean.edu.co\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/resend-code",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "resend-code"]
+						},
+						"description": "Reenvía el código de verificación al email"
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.accessToken) {",
+									"        pm.environment.set(\"access_token\", response.data.accessToken);",
+									"    } else if (response.accessToken) {",
+									"        pm.environment.set(\"access_token\", response.accessToken);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "refresh"]
+						},
+						"description": "Renueva el access token usando el refresh token"
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Perfil",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/profile",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "profile"]
+						},
+						"description": "Obtiene el perfil del usuario autenticado"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "logout"]
+						},
+						"description": "Cierra la sesión del usuario"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints de autenticación y gestión de sesiones"
+		},
+		{
+			"name": "Usuarios",
+			"item": [
+				{
+					"name": "Crear Usuario",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"nuevo@universidadean.edu.co\",\n  \"password\": \"Password123!\",\n  \"nombre\": \"Nuevo Usuario\",\n  \"role\": \"student\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": ["{{base_url}}"],
+							"path": ["users"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Usuarios",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users?page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["users"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Usuario",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/{{user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["users", "{{user_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Usuario",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Nombre Actualizado\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users/{{user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["users", "{{user_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Usuario",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/{{user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["users", "{{user_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Universidades",
+			"item": [
+				{
+					"name": "Crear Universidad",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Universidad EAN\",\n  \"ciudad\": \"Bogotá\",\n  \"imagen\": \"https://example.com/universidad-ean.jpg\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/universities",
+							"host": ["{{base_url}}"],
+							"path": ["universities"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Universidades",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/universities",
+							"host": ["{{base_url}}"],
+							"path": ["universities"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Filtrar por Ciudad",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/universities?ciudad=Bogotá",
+							"host": ["{{base_url}}"],
+							"path": ["universities"],
+							"query": [
+								{
+									"key": "ciudad",
+									"value": "Bogotá"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Universidad",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/universities/{{university_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["universities", "{{university_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Universidad",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Universidad EAN Actualizada\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/universities/{{university_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["universities", "{{university_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Universidad",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/universities/{{university_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["universities", "{{university_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Restaurantes",
+			"item": [
+				{
+					"name": "Crear Restaurante",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set(\"restaurant_id\", response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Restaurante La Esquina\",\n  \"universityId\": \"{{university_id}}\",\n  \"imagen\": \"https://example.com/restaurante.jpg\",\n  \"categorias\": [\"Comida Rápida\", \"Hamburguesas\"],\n  \"tiempoEntrega\": 20\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/restaurants",
+							"host": ["{{base_url}}"],
+							"path": ["restaurants"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Restaurantes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/restaurants",
+							"host": ["{{base_url}}"],
+							"path": ["restaurants"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Filtrar por Universidad",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/restaurants?universityId={{university_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["restaurants"],
+							"query": [
+								{
+									"key": "universityId",
+									"value": "{{university_id}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Mi Restaurante",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/restaurants/me",
+							"host": ["{{base_url}}"],
+							"path": ["restaurants", "me"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Restaurantes por Universidad",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/restaurants/university/{{university_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["restaurants", "university", "{{university_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Restaurante",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/restaurants/{{restaurant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["restaurants", "{{restaurant_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Restaurante",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Restaurante Actualizado\",\n  \"categorias\": [\"Comida Rápida\", \"Hamburguesas\", \"Pizzas\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/restaurants/{{restaurant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["restaurants", "{{restaurant_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Activar/Desactivar Restaurante",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/restaurants/{{restaurant_id}}/toggle-active",
+							"host": ["{{base_url}}"],
+							"path": ["restaurants", "{{restaurant_id}}", "toggle-active"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Restaurante",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/restaurants/{{restaurant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["restaurants", "{{restaurant_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Platos",
+			"item": [
+				{
+					"name": "Crear Plato",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set(\"dish_id\", response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Hamburguesa Clásica\",\n  \"descripcion\": \"Hamburguesa con carne, lechuga, tomate y queso\",\n  \"precio\": 15000,\n  \"categoria\": \"Hamburguesas\",\n  \"imagen\": \"https://example.com/hamburguesa.jpg\",\n  \"tipoPlato\": \"personalizable\",\n  \"restaurantId\": \"{{restaurant_id}}\",\n  \"toppings\": [\n    {\n      \"nombre\": \"Queso Extra\",\n      \"precio\": 2000,\n      \"removible\": true,\n      \"categoria\": \"Proteínas\"\n    },\n    {\n      \"nombre\": \"Bacon\",\n      \"precio\": 3000,\n      \"removible\": true,\n      \"categoria\": \"Proteínas\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/dishes",
+							"host": ["{{base_url}}"],
+							"path": ["dishes"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Platos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/dishes?page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["dishes"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Filtrar por Restaurante",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/dishes?restaurantId={{restaurant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["dishes"],
+							"query": [
+								{
+									"key": "restaurantId",
+									"value": "{{restaurant_id}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Menú del Restaurante",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/dishes/restaurant/{{restaurant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "restaurant", "{{restaurant_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Plato",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/dishes/{{dish_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "{{dish_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Plato",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"precio\": 16000,\n  \"descripcion\": \"Descripción actualizada\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/dishes/{{dish_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "{{dish_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Activar/Desactivar Plato",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/dishes/{{dish_id}}/toggle-active",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "{{dish_id}}", "toggle-active"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Agregar Topping",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Cebolla Caramelizada\",\n  \"precio\": 1500,\n  \"removible\": true,\n  \"categoria\": \"Verduras\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/dishes/{{dish_id}}/toppings",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "{{dish_id}}", "toppings"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Topping",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/dishes/{{dish_id}}/toppings/{{topping_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "{{dish_id}}", "toppings", "{{topping_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Plato",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/dishes/{{dish_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "{{dish_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Disponibilidad",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"disponible\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/dishes/{{dish_id}}/availability?restaurantId={{restaurant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "{{dish_id}}", "availability"],
+							"query": [
+								{
+									"key": "restaurantId",
+									"value": "{{restaurant_id}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Disponibilidad del Restaurante",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/dishes/availability/restaurant/{{restaurant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "availability", "restaurant", "{{restaurant_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Menú con Disponibilidad",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/dishes/menu/{{restaurant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "menu", "{{restaurant_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualización Masiva Disponibilidad",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"updates\": [\n    {\n      \"dishId\": \"{{dish_id}}\",\n      \"disponible\": true\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/dishes/availability/restaurant/{{restaurant_id}}/bulk",
+							"host": ["{{base_url}}"],
+							"path": ["dishes", "availability", "restaurant", "{{restaurant_id}}", "bulk"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Pedidos",
+			"item": [
+				{
+					"name": "Crear Pedido",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set(\"order_id\", response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"restaurantId\": \"{{restaurant_id}}\",\n  \"items\": [\n    {\n      \"dishId\": \"{{dish_id}}\",\n      \"dishNombre\": \"Hamburguesa Clásica\",\n      \"cantidad\": 2,\n      \"precioUnitario\": 15000,\n      \"precioTotal\": 30000,\n      \"toppingsSeleccionados\": [\n        {\n          \"toppingId\": \"topping-uuid\",\n          \"nombre\": \"Queso Extra\",\n          \"precio\": 2000\n        }\n      ],\n      \"comentarios\": \"Sin cebolla\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/orders",
+							"host": ["{{base_url}}"],
+							"path": ["orders"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Pedidos",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders?page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["orders"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Pedido",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Pedidos del Restaurante",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders/restaurant/{{restaurant_id}}?page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "restaurant", "{{restaurant_id}}"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Estado",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"PREPARANDO\",\n  \"tiempoEstimado\": 15,\n  \"comentarios\": \"En preparación\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}/status",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}", "status"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Cancelar Pedido",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"motivo\": \"Cliente canceló\",\n  \"comentariosRestaurante\": \"Pedido cancelado por el cliente\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}/cancel",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}", "cancel"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Notificaciones",
+			"item": [
+				{
+					"name": "Registrar Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set(\"notification_token_id\", response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"expoPushToken\": \"ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]\",\n  \"deviceId\": \"unique-device-id-123\",\n  \"platform\": \"ios\",\n  \"deviceInfo\": {\n    \"model\": \"iPhone 14\",\n    \"osVersion\": \"16.0\"\n  },\n  \"configuraciones\": {\n    \"pedidosNuevos\": true,\n    \"cambiosEstado\": true,\n    \"promociones\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/notifications/register",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", "register"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Mis Tokens",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/notifications/me",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", "me"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Token",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"configuraciones\": {\n    \"pedidosNuevos\": true,\n    \"cambiosEstado\": true,\n    \"promociones\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/notifications/{{notification_token_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", "{{notification_token_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Desactivar Token",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/notifications/{{notification_token_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", "{{notification_token_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Desactivar Todos los Tokens",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/notifications",
+							"host": ["{{base_url}}"],
+							"path": ["notifications"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Enviar Notificación Manual",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"recipients\": [\"{{user_id}}\"],\n  \"type\": \"custom\",\n  \"title\": \"Notificación de Prueba\",\n  \"body\": \"Este es un mensaje de prueba\",\n  \"data\": {\n    \"customData\": \"valor\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/notifications/send",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", "send"]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Test global para verificar que la respuesta sea exitosa",
+					"pm.test(\"Status code is success\", function () {",
+					"    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+					"});"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		}
+	]
+}
+

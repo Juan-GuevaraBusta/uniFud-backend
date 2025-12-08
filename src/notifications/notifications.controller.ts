@@ -25,7 +25,43 @@ export class NotificationsController {
     summary: 'Registrar token de notificación',
     description: 'Registra o actualiza el token de Expo del dispositivo actual',
   })
-  @ApiResponse({ status: 201, description: 'Token registrado', type: NotificationTokenResponseDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Token registrado', 
+    type: NotificationTokenResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o validación fallida',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['expoPushToken debe ser una cadena válida', 'deviceId es requerido'],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async registerToken(@Body() dto: RegisterTokenDto, @CurrentUser() user: any) {
     return await this.notificationsService.registerToken(user.id, user.email, dto);
   }
@@ -37,7 +73,32 @@ export class NotificationsController {
   @Roles(UserRole.STUDENT, UserRole.RESTAURANT_OWNER, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Listado de tokens del usuario autenticado' })
-  @ApiResponse({ status: 200, type: [NotificationTokenResponseDto] })
+  @ApiResponse({ 
+    status: 200, 
+    type: [NotificationTokenResponseDto],
+    description: 'Lista de tokens del usuario',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async getMyTokens(@CurrentUser() user: any) {
     return await this.notificationsService.getUserTokens(user.id);
   }
@@ -49,8 +110,70 @@ export class NotificationsController {
   @Roles(UserRole.STUDENT, UserRole.RESTAURANT_OWNER, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Actualizar token de notificación' })
-  @ApiParam({ name: 'id', description: 'ID del token' })
-  @ApiResponse({ status: 200, type: NotificationTokenResponseDto })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'ID del token (UUID)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({ 
+    status: 200, 
+    type: NotificationTokenResponseDto,
+    description: 'Token actualizado exitosamente',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['configuraciones debe ser un objeto válido'],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para actualizar este token',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para actualizar este token',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Token no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Token no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async updateToken(
     @Param('id') tokenId: string,
     @Body() dto: UpdateTokenDto,
@@ -66,8 +189,58 @@ export class NotificationsController {
   @Roles(UserRole.STUDENT, UserRole.RESTAURANT_OWNER, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Desactivar token de notificación' })
-  @ApiParam({ name: 'id', description: 'ID del token' })
-  @ApiResponse({ status: 204, description: 'Token desactivado' })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'ID del token (UUID)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({ 
+    status: 204, 
+    description: 'Token desactivado exitosamente',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para desactivar este token',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para desactivar este token',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Token no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Token no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async deactivateToken(@Param('id') tokenId: string, @CurrentUser() user: any) {
     await this.notificationsService.deactivateToken(tokenId, user.id);
   }
@@ -79,7 +252,38 @@ export class NotificationsController {
   @Roles(UserRole.STUDENT, UserRole.RESTAURANT_OWNER, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Desactivar todos los tokens del usuario' })
-  @ApiResponse({ status: 200, description: 'Cantidad de tokens desactivados', schema: { example: { deactivated: 2 } } })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Cantidad de tokens desactivados', 
+    schema: { 
+      example: { 
+        success: true,
+        data: { deactivated: 2 },
+        timestamp: '2024-01-15T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async deactivateAllTokens(@CurrentUser() user: any) {
     const count = await this.notificationsService.deactivateUserTokens(user.id);
     return { deactivated: count };
@@ -100,9 +304,56 @@ export class NotificationsController {
     description: 'Resultado del envío',
     schema: {
       example: {
-        attempted: 3,
-        sent: 2,
-        failed: 1,
+        success: true,
+        data: {
+          attempted: 3,
+          sent: 2,
+          failed: 1,
+        },
+        timestamp: '2024-01-15T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o validación fallida',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['title es requerido', 'body es requerido'],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para enviar notificaciones',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Solo administradores y propietarios pueden enviar notificaciones',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor o error al enviar notificaciones',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error al enviar notificaciones',
+        error: 'Internal Server Error',
       },
     },
   })
@@ -110,4 +361,5 @@ export class NotificationsController {
     return await this.notificationsService.sendPushNotification(user.id, user.role, dto);
   }
 }
+
 

@@ -41,8 +41,29 @@ export class RestaurantsController {
     description: 'No tienes permisos para crear restaurantes',
   })
   @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
     status: 409,
     description: 'Ya tienes un restaurante o el nombre está duplicado',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async create(
     @Body() createRestaurantDto: CreateRestaurantDto,
@@ -71,6 +92,17 @@ export class RestaurantsController {
     description: 'Lista de restaurantes',
     type: [RestaurantResponseDto],
   })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async findAll(@Query('universityId') universityId?: string) {
     if (universityId) {
       return await this.restaurantsService.findByUniversity(universityId);
@@ -94,8 +126,29 @@ export class RestaurantsController {
     type: RestaurantResponseDto,
   })
   @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
     status: 404,
     description: 'No tienes un restaurante registrado',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async findMine(@CurrentUser() user: any) {
     const restaurant = await this.restaurantsService.findByOwner(user.id);
@@ -128,6 +181,17 @@ export class RestaurantsController {
     status: 404,
     description: 'Universidad no encontrada',
   })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async findByUniversity(@Param('universityId') universityId: string) {
     return await this.restaurantsService.findByUniversity(universityId);
   }
@@ -154,6 +218,17 @@ export class RestaurantsController {
   @ApiResponse({
     status: 404,
     description: 'Restaurante no encontrado',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async findOne(@Param('id') id: string) {
     return await this.restaurantsService.findOne(id);
@@ -183,8 +258,29 @@ export class RestaurantsController {
     description: 'No tienes permisos para actualizar este restaurante',
   })
   @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
     status: 404,
     description: 'Restaurante no encontrado',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async update(
     @Param('id') id: string,
@@ -212,6 +308,49 @@ export class RestaurantsController {
     status: 200,
     description: 'Estado cambiado exitosamente',
     type: RestaurantResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para modificar este restaurante',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para modificar este restaurante',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Restaurante no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Restaurante no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async toggleActive(
     @Param('id') id: string,
@@ -244,8 +383,29 @@ export class RestaurantsController {
     description: 'No tienes permisos para eliminar este restaurante',
   })
   @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
     status: 404,
     description: 'Restaurante no encontrado',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async remove(
     @Param('id') id: string,
@@ -254,6 +414,7 @@ export class RestaurantsController {
     await this.restaurantsService.remove(id, user.id, user.role);
   }
 }
+
 
 
 

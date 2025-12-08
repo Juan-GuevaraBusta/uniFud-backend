@@ -28,11 +28,69 @@ export class OrdersController {
   @Post()
   @Roles(UserRole.STUDENT, UserRole.ADMIN)
   @ApiBearerAuth()
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Crear pedido',
     description: 'Permite a un estudiante crear un nuevo pedido en un restaurante',
   })
-  @ApiResponse({ status: 201, description: 'Pedido creado exitosamente' })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Pedido creado exitosamente',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          numeroOrden: '#001-2024',
+          status: 'PENDIENTE',
+          total: 15750,
+        },
+        timestamp: '2024-01-15T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos, plato no disponible, o restaurante inactivo',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'El plato no está disponible actualmente',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado (solo estudiantes pueden crear pedidos)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Forbidden resource',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async create(@Body() createOrderDto: CreateOrderDto, @CurrentUser() user: any) {
     return await this.ordersService.create(createOrderDto, user.id);
   }
@@ -58,6 +116,57 @@ export class OrdersController {
     required: false,
     description: 'Resultados por página (por defecto 20)',
     example: 20,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de pedidos paginada',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          items: [],
+          meta: {
+            total: 10,
+            limit: 20,
+            page: 1,
+            totalPages: 1,
+          },
+        },
+        timestamp: '2024-01-15T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Parámetros inválidos o rango de fechas inválido',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'El rango de fechas es inválido (startDate > endDate)',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async findAll(
     @CurrentUser() user: any,
@@ -102,8 +211,75 @@ export class OrdersController {
   @Get(':id')
   @Roles(UserRole.STUDENT, UserRole.RESTAURANT_OWNER, UserRole.ADMIN)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Detalle del pedido' })
-  @ApiParam({ name: 'id', description: 'ID del pedido' })
+  @ApiOperation({ 
+    summary: 'Detalle del pedido',
+    description: 'Obtiene los detalles completos de un pedido específico. El acceso depende del rol del usuario.',
+  })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'ID del pedido (UUID)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Detalle del pedido',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          numeroOrden: '#001-2024',
+          status: 'PENDIENTE',
+          items: [],
+          total: 15750,
+        },
+        timestamp: '2024-01-15T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes acceso a este pedido',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes acceso a este pedido',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Pedido no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Pedido con ID 123e4567-e89b-12d3-a456-426614174000 no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async findOne(@Param('id') id: string, @CurrentUser() user: any) {
     const order = await this.ordersService.findOne(id);
 
@@ -138,7 +314,11 @@ export class OrdersController {
     summary: 'Pedidos del restaurante',
     description: 'Retorna los pedidos de un restaurante. Solo para propietarios o admin',
   })
-  @ApiParam({ name: 'restaurantId', description: 'ID del restaurante' })
+  @ApiParam({ 
+    name: 'restaurantId', 
+    description: 'ID del restaurante (UUID)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
   @ApiQuery({
     name: 'page',
     required: false,
@@ -156,6 +336,68 @@ export class OrdersController {
     required: false,
     enum: OrderStatus,
     description: 'Filtrar por estado del pedido',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de pedidos del restaurante',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          items: [],
+          meta: {
+            total: 5,
+            limit: 20,
+            page: 1,
+            totalPages: 1,
+          },
+        },
+        timestamp: '2024-01-15T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para ver pedidos de este restaurante',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para ver pedidos de este restaurante',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Restaurante no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Restaurante no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
   })
   async findByRestaurant(
     @Param('restaurantId') restaurantId: string,
@@ -181,8 +423,80 @@ export class OrdersController {
     summary: 'Actualizar estado del pedido',
     description: 'Permite al restaurante avanzar el estado de un pedido',
   })
-  @ApiParam({ name: 'id', description: 'ID del pedido' })
-  @ApiResponse({ status: 200, description: 'Estado actualizado exitosamente' })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'ID del pedido (UUID)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Estado actualizado exitosamente',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          status: 'PREPARANDO',
+          fechaAceptado: '2024-01-15T10:30:00.000Z',
+        },
+        timestamp: '2024-01-15T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Transición de estado inválida o datos inválidos',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Utiliza el endpoint de cancelación para cancelar pedidos',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para actualizar este pedido',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para actualizar este pedido',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Pedido no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Pedido no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async updateStatus(
     @Param('id') id: string,
     @Body() updateOrderStatusDto: UpdateOrderStatusDto,
@@ -211,8 +525,80 @@ export class OrdersController {
     summary: 'Cancelar pedido',
     description: 'Permite cancelar un pedido. Los estudiantes solo pueden cancelar pedidos pendientes.',
   })
-  @ApiParam({ name: 'id', description: 'ID del pedido' })
-  @ApiResponse({ status: 200, description: 'Pedido cancelado exitosamente' })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'ID del pedido (UUID)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Pedido cancelado exitosamente',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          status: 'CANCELADO',
+          motivo: 'Cliente canceló',
+        },
+        timestamp: '2024-01-15T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No se puede cancelar el pedido en su estado actual',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Solo se pueden cancelar pedidos en estado PENDIENTE',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para cancelar este pedido',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para cancelar este pedido',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Pedido no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Pedido no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
   async cancel(
     @Param('id') id: string,
     @Body() cancelOrderDto: CancelOrderDto,
