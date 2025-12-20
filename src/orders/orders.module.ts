@@ -6,6 +6,7 @@ import { RestaurantsModule } from '../restaurants/restaurants.module';
 import { DishesModule } from '../dishes/dishes.module';
 import { OrdersController } from './orders.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { OrdersGateway } from './orders.gateway';
 
 @Module({
   imports: [
@@ -15,8 +16,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService],
-  exports: [OrdersService],
+  providers: [OrdersService, OrdersGateway],
+  exports: [OrdersService, OrdersGateway],
 })
 export class OrdersModule {}
 

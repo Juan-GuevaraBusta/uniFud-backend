@@ -1,4 +1,6 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Restaurant } from './entities/restaurant.entity';
@@ -15,6 +17,7 @@ export class RestaurantsService {
     @InjectRepository(Restaurant)
     private readonly restaurantRepository: Repository<Restaurant>,
     private readonly universitiesService: UniversitiesService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   /**
@@ -60,7 +63,12 @@ export class RestaurantsService {
       tiempoEntrega: createRestaurantDto.tiempoEntrega || 20, // Default 20 minutos
     });
 
-    return await this.restaurantRepository.save(restaurant);
+    const savedRestaurant = await this.restaurantRepository.save(restaurant);
+
+    // Invalidar caché de restaurantes de esta universidad
+    await this.invalidateRestaurantCache(createRestaurantDto.universityId);
+
+    return savedRestaurant;
   }
 
   /**
@@ -80,10 +88,18 @@ export class RestaurantsService {
    * Obtener restaurantes por universidad
    */
   async findByUniversity(universityId: string): Promise<Restaurant[]> {
+    const cacheKey = `restaurants:university:${universityId}`;
+
+    // Intentar obtener de caché
+    const cached = await this.cacheManager.get<Restaurant[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     // Verificar que la universidad exista
     await this.universitiesService.findOne(universityId);
 
-    return await this.restaurantRepository.find({
+    const restaurants = await this.restaurantRepository.find({
       where: {
         universityId,
         activo: true,
@@ -93,6 +109,23 @@ export class RestaurantsService {
         calificacion: 'DESC',
         nombre: 'ASC',
       },
+    });
+
+    // Guardar en caché por 15 minutos (900 segundos)
+    await this.cacheManager.set(cacheKey, restaurants, 900).catch(() => {
+      // Si falla guardar en caché, no bloquea la operación
+    });
+
+    return restaurants;
+  }
+
+  /**
+   * Invalidar caché de restaurantes de una universidad
+   */
+  private async invalidateRestaurantCache(universityId: string): Promise<void> {
+    const cacheKey = `restaurants:university:${universityId}`;
+    await this.cacheManager.del(cacheKey).catch(() => {
+      // Si falla la invalidación, no bloquea la operación
     });
   }
 
@@ -166,7 +199,18 @@ export class RestaurantsService {
     // Aplicar cambios
     Object.assign(restaurant, updateRestaurantDto);
 
-    return await this.restaurantRepository.save(restaurant);
+    const updatedRestaurant = await this.restaurantRepository.save(restaurant);
+
+    // Invalidar caché si cambió la universidad o estado activo
+    if (updateRestaurantDto.universityId || updateRestaurantDto.activo !== undefined) {
+      await this.invalidateRestaurantCache(restaurant.universityId);
+      // Si cambió la universidad, también invalidar la nueva
+      if (updateRestaurantDto.universityId && updateRestaurantDto.universityId !== restaurant.universityId) {
+        await this.invalidateRestaurantCache(updateRestaurantDto.universityId);
+      }
+    }
+
+    return updatedRestaurant;
   }
 
   /**
@@ -180,7 +224,11 @@ export class RestaurantsService {
       throw new ForbiddenAccessException('No tienes permisos para eliminar este restaurante', 'RESTAURANT_DELETE_FORBIDDEN');
     }
 
+    const universityId = restaurant.universityId;
     await this.restaurantRepository.remove(restaurant);
+
+    // Invalidar caché después de eliminar
+    await this.invalidateRestaurantCache(universityId);
   }
 
   /**
@@ -196,7 +244,12 @@ export class RestaurantsService {
 
     restaurant.activo = !restaurant.activo;
 
-    return await this.restaurantRepository.save(restaurant);
+    const updatedRestaurant = await this.restaurantRepository.save(restaurant);
+
+    // Invalidar caché al cambiar estado activo
+    await this.invalidateRestaurantCache(restaurant.universityId);
+
+    return updatedRestaurant;
   }
 }
 

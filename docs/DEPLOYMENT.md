@@ -639,3 +639,4 @@ sudo systemctl reload nginx
 **Última actualización**: Enero 2024  
 **Versión**: 1.0.0
 
+

@@ -36,9 +36,11 @@ export class User {
     emailVerified: boolean;
 
     @Column({ length: 6 })
+    @Exclude()
     verificationCode?: string;
 
     @Column({ type: 'timestamp' })
+    @Exclude()
     verificationCodeExpiry?: Date;
 
     @OneToMany(() => Order, (order) => order.user)

@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus, UseInterceptors } from '@nestjs/common';
+import { CacheInterceptor, CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { UniversitiesService } from './universities.service';
 import { CreateUniversityDto } from './dto/create-university.dto';
@@ -63,9 +64,12 @@ export class UniversitiesController {
    */
   @Public()
   @Get()
+  @UseInterceptors(CacheInterceptor)
+  @CacheKey('universities:all')
+  @CacheTTL(3600) // 1 hora = 3600 segundos
   @ApiOperation({
     summary: 'Listar universidades',
-    description: 'Obtiene todas las universidades registradas',
+    description: 'Obtiene todas las universidades registradas (cacheado por 1 hora)',
   })
   @ApiResponse({
     status: 200,

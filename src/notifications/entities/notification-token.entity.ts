@@ -11,6 +11,7 @@ export enum NotificationPlatform {
 @Index(['userId', 'deviceId'], { unique: true })
 @Index(['userDevice'], { unique: true })
 @Index(['expoPushToken'])
+@Index(['userId', 'activo']) // Para queries de tokens activos por usuario
 export class NotificationToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;

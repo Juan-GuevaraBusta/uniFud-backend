@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import {ConfigModule, ConfigService} from '@nestjs/config';
 import {TypeOrmModule} from '@nestjs/typeorm';
+import { CacheModule } from '@nestjs/cache-manager';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
+import cacheConfig from './config/cache.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import {ThrottlerModule} from '@nestjs/throttler';
@@ -20,8 +22,13 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, jwtConfig],
+      load: [databaseConfig, jwtConfig, cacheConfig],
       envFilePath: '.env',
+    }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => configService.get('cache'),
     }),
     ThrottlerModule.forRoot({
       throttlers: [

@@ -1,4 +1,6 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindManyOptions, Repository } from 'typeorm';
 import { Dish, DishType } from './entities/dish.entity';
@@ -25,6 +27,7 @@ export class DishesService {
     @InjectRepository(DishAvailability)
     private readonly availabilityRepository: Repository<DishAvailability>,
     private readonly restaurantsService: RestaurantsService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   /**
@@ -59,7 +62,12 @@ export class DishesService {
       toppings: createDishDto.toppings || [],
     });
 
-    return await this.dishRepository.save(dish);
+    const savedDish = await this.dishRepository.save(dish);
+
+    // Invalidar caché del menú después de crear
+    await this.invalidateDishMenuCache(createDishDto.restaurantId);
+
+    return savedDish;
   }
 
   /**
@@ -189,7 +197,12 @@ export class DishesService {
     // Aplicar cambios
     Object.assign(dish, updateDishDto);
 
-    return await this.dishRepository.save(dish);
+    const updatedDish = await this.dishRepository.save(dish);
+
+    // Invalidar caché del menú después de actualizar
+    await this.invalidateDishMenuCache(dish.restaurantId);
+
+    return updatedDish;
   }
 
   /**
@@ -205,7 +218,11 @@ export class DishesService {
       throw new ForbiddenAccessException('Solo el dueño del restaurante puede eliminar este plato', 'DISH_DELETE_FORBIDDEN');
     }
 
+    const restaurantId = dish.restaurantId;
     await this.dishRepository.remove(dish);
+
+    // Invalidar caché del menú después de eliminar
+    await this.invalidateDishMenuCache(restaurantId);
   }
 
   /**
@@ -223,7 +240,12 @@ export class DishesService {
 
     dish.activo = !dish.activo;
 
-    return await this.dishRepository.save(dish);
+    const updatedDish = await this.dishRepository.save(dish);
+
+    // Invalidar caché del menú al cambiar estado activo
+    await this.invalidateDishMenuCache(dish.restaurantId);
+
+    return updatedDish;
   }
 
   /**
@@ -401,7 +423,12 @@ export class DishesService {
       });
     }
 
-    return await this.availabilityRepository.save(availability);
+    const savedAvailability = await this.availabilityRepository.save(availability);
+
+    // Invalidar caché del menú después de actualizar disponibilidad
+    await this.invalidateDishMenuCache(restaurantId);
+
+    return savedAvailability;
   }
 
   /**
@@ -480,6 +507,9 @@ export class DishesService {
       results.push(saved);
     }
 
+    // Invalidar caché del menú después de actualización masiva
+    await this.invalidateDishMenuCache(restaurantId);
+
     return {
       updated: results.length,
       results,
@@ -490,6 +520,14 @@ export class DishesService {
    * Obtener menú con disponibilidad incluida
    */
   async getMenuWithAvailability(restaurantId: string): Promise<any[]> {
+    const cacheKey = `dishes:restaurant:${restaurantId}:menu`;
+
+    // Intentar obtener de caché
+    const cached = await this.cacheManager.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const dishes = await this.findByRestaurant(restaurantId);
     const availabilities = await this.getRestaurantAvailability(restaurantId);
 
@@ -500,10 +538,27 @@ export class DishesService {
     }
 
     // Agregar disponibilidad a cada plato
-    return dishes.items.map(dish => ({
+    const menu = dishes.items.map(dish => ({
       ...dish,
       disponible: availabilityMap.get(dish.id) ?? true, // Default: disponible
     }));
+
+    // Guardar en caché por 10 minutos (600 segundos)
+    await this.cacheManager.set(cacheKey, menu, 600).catch(() => {
+      // Si falla guardar en caché, no bloquea la operación
+    });
+
+    return menu;
+  }
+
+  /**
+   * Invalidar caché del menú de un restaurante
+   */
+  private async invalidateDishMenuCache(restaurantId: string): Promise<void> {
+    const cacheKey = `dishes:restaurant:${restaurantId}:menu`;
+    await this.cacheManager.del(cacheKey).catch(() => {
+      // Si falla la invalidación, no bloquea la operación
+    });
   }
 
   private buildPaginatedResponse<T>(

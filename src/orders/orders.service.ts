@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order, OrderStatus } from './entities/order.entity';
@@ -14,15 +14,19 @@ import { PaginatedResponse } from '../common/interfaces/paginated-response.inter
 import { BusinessException } from '../common/exceptions/business-exception';
 import { ForbiddenAccessException } from '../common/exceptions/unauthorized-exception';
 import { ResourceNotFoundException } from '../common/exceptions/not-found-exception';
+import { OrdersGateway } from './orders.gateway';
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
     private readonly restaurantsService: RestaurantsService,
     private readonly dishesService: DishesService,
     private readonly notificationsService: NotificationsService,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   private readonly statusTransitions: Record<OrderStatus, OrderStatus[]> = {
@@ -131,7 +135,19 @@ export class OrdersService {
     const savedOrder = await this.orderRepository.save(order);
     const fullOrder = await this.findOne(savedOrder.id);
 
-    await this.notificationsService.notifyNewOrder(fullOrder);
+    // 8. Notificar vía push notification (no bloquea si falla)
+    try {
+      await this.notificationsService.notifyNewOrder(fullOrder);
+    } catch (error) {
+      this.logger.error(`Error al enviar notificación push para pedido ${fullOrder.id}:`, error);
+    }
+
+    // 9. Notificar vía WebSocket (no bloquea si falla)
+    try {
+      this.ordersGateway.notifyNewOrder(fullOrder);
+    } catch (error) {
+      this.logger.error(`Error al emitir evento WebSocket para nuevo pedido ${fullOrder.id}:`, error);
+    }
 
     return fullOrder;
   }
@@ -408,7 +424,19 @@ export class OrdersService {
     const saved = await this.orderRepository.save(order);
     const fullOrder = await this.findOne(saved.id);
 
-    await this.notificationsService.notifyOrderStatusChange(fullOrder);
+    // Notificar vía push notification (no bloquea si falla)
+    try {
+      await this.notificationsService.notifyOrderStatusChange(fullOrder);
+    } catch (error) {
+      this.logger.error(`Error al enviar notificación push para cambio de estado del pedido ${fullOrder.id}:`, error);
+    }
+
+    // Notificar vía WebSocket (no bloquea si falla)
+    try {
+      this.ordersGateway.notifyStatusChange(fullOrder);
+    } catch (error) {
+      this.logger.error(`Error al emitir evento WebSocket para cambio de estado del pedido ${fullOrder.id}:`, error);
+    }
 
     return fullOrder;
   }
@@ -469,7 +497,19 @@ export class OrdersService {
     const saved = await this.orderRepository.save(order);
     const fullOrder = await this.findOne(saved.id);
 
-    await this.notificationsService.notifyOrderCancelled(fullOrder, actorRole);
+    // Notificar vía push notification (no bloquea si falla)
+    try {
+      await this.notificationsService.notifyOrderCancelled(fullOrder, actorRole);
+    } catch (error) {
+      this.logger.error(`Error al enviar notificación push para cancelación del pedido ${fullOrder.id}:`, error);
+    }
+
+    // Notificar vía WebSocket (no bloquea si falla)
+    try {
+      this.ordersGateway.notifyStatusChange(fullOrder);
+    } catch (error) {
+      this.logger.error(`Error al emitir evento WebSocket para cancelación del pedido ${fullOrder.id}:`, error);
+    }
 
     return fullOrder;
   }

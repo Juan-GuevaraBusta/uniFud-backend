@@ -1,5 +1,5 @@
-import { NestFactory } from '@nestjs/core';
-import{ ValidationPipe } from '@nestjs/common';
+import { NestFactory, Reflector } from '@nestjs/core';
+import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { getCorsConfig } from './config/cors.config';
 import helmet from 'helmet';
@@ -15,7 +15,7 @@ async function bootstrap() {
    app.use(helmet());
 
    // CORS con configuración por entorno
-   app.enableCors({
+   const corsConfig = {
      ...getCorsConfig(),
      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
      allowedHeaders: [
@@ -27,7 +27,9 @@ async function bootstrap() {
      ],
      exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page'],
      maxAge: 3600,
-   });
+   };
+   
+   app.enableCors(corsConfig);
  
    // ValidationPipe global
    app.useGlobalPipes(
@@ -41,7 +43,11 @@ async function bootstrap() {
      }),
    );
 
-   app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
+   app.useGlobalInterceptors(
+     new ClassSerializerInterceptor(app.get(Reflector)),
+     new LoggingInterceptor(),
+     new TransformInterceptor(),
+   );
    app.useGlobalFilters(new AllExceptionsFilter());
 
    // Configuración de Swagger

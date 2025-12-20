@@ -576,8 +576,223 @@ NODE_ENV=development
 
 ---
 
-**Última actualización**: Día 10 completado + refinamientos Día 11 (mañana)
-**Estado**: Sistema de autenticación completo y funcional ✅
+---
+
+## Testing de WebSockets (Día 13)
+
+Los WebSockets permiten notificaciones en tiempo real para pedidos. El servidor emite eventos cuando:
+- Se crea un nuevo pedido → restaurante recibe `new-order`
+- Cambia el estado de un pedido → usuario y restaurante reciben `order-status-changed`
+
+### Configuración
+
+El namespace de WebSockets es `/orders` y está disponible en:
+```
+ws://localhost:3000/orders
+```
+
+### Opción 1: Script de Testing Automatizado
+
+Se incluye un script de testing en `test/websocket-test.ts`:
+
+```bash
+# Asegúrate de tener ts-node instalado
+npm install --save-dev ts-node
+
+# Ejecuta el script
+npx ts-node test/websocket-test.ts
+```
+
+**Antes de ejecutar**, edita el archivo `test/websocket-test.ts` y configura:
+- `restaurantId`: ID de un restaurante existente
+- `userId`: ID de un usuario estudiante (opcional)
+
+El script creará dos clientes:
+1. **Cliente Restaurante**: Se une a la sala del restaurante y escucha nuevos pedidos
+2. **Cliente Estudiante**: Escucha cambios de estado de sus pedidos
+
+### Opción 2: Postman WebSocket
+
+1. Abre Postman
+2. Crea una nueva solicitud WebSocket
+3. URL: `ws://localhost:3000/orders`
+4. Conecta al servidor
+
+#### Unirse a sala de restaurante
+
+**Evento**: `join-restaurant-room`
+**Payload**:
+```json
+{
+  "restaurantId": "uuid-del-restaurante",
+  "userId": "uuid-del-usuario"
+}
+```
+
+**Respuesta esperada**:
+```json
+{
+  "restaurantId": "uuid-del-restaurante",
+  "room": "restaurant:uuid-del-restaurante"
+}
+```
+
+#### Escuchar eventos
+
+Una vez unido, escucharás automáticamente:
+
+**Evento: `new-order`** (cuando se crea un pedido)
+```json
+{
+  "order": {
+    "id": "uuid",
+    "numeroOrden": "#ABC-123",
+    "userId": "uuid",
+    "restaurantId": "uuid",
+    "status": "pendiente",
+    "items": [...],
+    "subtotal": 15000,
+    "tarifaServicio": 750,
+    "total": 15750,
+    "fechaPedido": "2025-12-11T..."
+  },
+  "timestamp": "2025-12-11T..."
+}
+```
+
+**Evento: `order-status-changed`** (cuando cambia el estado)
+```json
+{
+  "order": {
+    "id": "uuid",
+    "numeroOrden": "#ABC-123",
+    "status": "aceptado",
+    "tiempoEstimado": 30,
+    "comentariosRestaurante": "En preparación",
+    "fechaAceptado": "2025-12-11T...",
+    "updatedAt": "2025-12-11T..."
+  },
+  "timestamp": "2025-12-11T..."
+}
+```
+
+### Opción 3: Cliente JavaScript/TypeScript
+
+```typescript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000/orders', {
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+});
+
+// Conectar
+socket.on('connect', () => {
+  console.log('Conectado');
+  
+  // Unirse a sala de restaurante
+  socket.emit('join-restaurant-room', {
+    restaurantId: 'tu-restaurant-id',
+    userId: 'tu-user-id',
+  });
+});
+
+// Escuchar nuevos pedidos
+socket.on('new-order', (data) => {
+  console.log('Nuevo pedido:', data);
+});
+
+// Escuchar cambios de estado
+socket.on('order-status-changed', (data) => {
+  console.log('Estado cambiado:', data);
+});
+
+// Manejar errores
+socket.on('error', (error) => {
+  console.error('Error:', error);
+});
+```
+
+### Flujo de Testing Completo
+
+1. **Preparación**:
+   - Inicia el servidor: `npm run start:dev`
+   - Tener un restaurante creado y activo
+   - Tener un usuario estudiante autenticado
+
+2. **Conectar como restaurante**:
+   - Usa Postman WebSocket o el script de testing
+   - Conecta a `ws://localhost:3000/orders`
+   - Emite `join-restaurant-room` con el `restaurantId`
+
+3. **Crear pedido** (desde otro cliente):
+   ```bash
+   curl -X POST http://localhost:3000/orders \
+     -H "Authorization: Bearer TOKEN_ESTUDIANTE" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "restaurantId": "uuid-restaurante",
+       "items": [...]
+     }'
+   ```
+
+4. **Verificar notificación**:
+   - El cliente restaurante debe recibir `new-order` inmediatamente
+   - Verifica que el payload contenga todos los datos del pedido
+
+5. **Actualizar estado**:
+   ```bash
+   curl -X PATCH http://localhost:3000/orders/ORDER_ID/status \
+     -H "Authorization: Bearer TOKEN_RESTAURANTE" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "status": "aceptado",
+       "tiempoEstimado": 30
+     }'
+   ```
+
+6. **Verificar notificación de cambio**:
+   - El cliente restaurante debe recibir `order-status-changed`
+   - Si el estudiante está conectado, también debe recibirlo
+
+7. **Probar reconexión**:
+   - Desconecta el cliente WebSocket
+   - Reconecta
+   - Vuelve a unirte a la sala
+   - Verifica que siga recibiendo eventos
+
+### Verificación de Múltiples Clientes
+
+Para probar con múltiples clientes simultáneos:
+
+1. Abre múltiples instancias de Postman WebSocket o ejecuta el script varias veces
+2. Todos los clientes en la misma sala deben recibir los mismos eventos
+3. Verifica que no haya duplicados ni pérdida de mensajes
+
+### Troubleshooting WebSockets
+
+**Error: "Cannot connect to WebSocket"**
+- Verifica que el servidor esté corriendo
+- Verifica que el puerto sea 3000
+- Verifica la URL: debe ser `ws://localhost:3000/orders` (no `http://`)
+
+**No recibo eventos**
+- Verifica que te hayas unido a la sala con `join-restaurant-room`
+- Verifica que el `restaurantId` sea correcto
+- Revisa los logs del servidor para ver si hay errores
+
+**Reconexión no funciona**
+- El cliente debe tener `reconnection: true` en la configuración
+- Después de reconectar, debes volver a unirte a la sala
+
+**Eventos duplicados**
+- Asegúrate de no estar escuchando el mismo evento múltiples veces
+- Verifica que no tengas múltiples conexiones activas
+
+---
+
+**Última actualización**: Día 13 completado - WebSockets implementados y documentados ✅
+**Estado**: Sistema de notificaciones en tiempo real completo y funcional ✅
 
 
 

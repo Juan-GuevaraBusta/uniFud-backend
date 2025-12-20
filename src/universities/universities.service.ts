@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { University } from './entities/university.entity';
@@ -10,6 +12,7 @@ export class UniversitiesService {
   constructor(
     @InjectRepository(University)
     private readonly universityRepository: Repository<University>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   /**
@@ -34,7 +37,14 @@ export class UniversitiesService {
     const university = this.universityRepository.create(createUniversityDto);
 
     // Guardar en la base de datos
-    return await this.universityRepository.save(university);
+    const savedUniversity = await this.universityRepository.save(university);
+
+    // Invalidar caché después de crear
+    await this.cacheManager.del('universities:all').catch(() => {
+      // Si falla la invalidación, no bloquea la operación
+    });
+
+    return savedUniversity;
   }
 
   /**
@@ -102,7 +112,14 @@ export class UniversitiesService {
     Object.assign(university, updateUniversityDto);
 
     // Guardar
-    return await this.universityRepository.save(university);
+    const updatedUniversity = await this.universityRepository.save(university);
+
+    // Invalidar caché después de actualizar
+    await this.cacheManager.del('universities:all').catch(() => {
+      // Si falla la invalidación, no bloquea la operación
+    });
+
+    return updatedUniversity;
   }
 
   /**
@@ -111,5 +128,10 @@ export class UniversitiesService {
   async remove(id: string): Promise<void> {
     const university = await this.findOne(id);
     await this.universityRepository.remove(university);
+
+    // Invalidar caché después de eliminar
+    await this.cacheManager.del('universities:all').catch(() => {
+      // Si falla la invalidación, no bloquea la operación
+    });
   }
 }
