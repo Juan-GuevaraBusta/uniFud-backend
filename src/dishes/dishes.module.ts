@@ -5,11 +5,12 @@ import { DishesController } from './dishes.controller';
 import { Dish } from './entities/dish.entity';
 import { Topping } from './entities/topping.entity';
 import { DishAvailability } from './entities/dish-availability.entity';
+import { Order } from '../orders/entities/order.entity';
 import { RestaurantsModule } from '../restaurants/restaurants.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Dish, Topping, DishAvailability]),
+    TypeOrmModule.forFeature([Dish, Topping, DishAvailability, Order]),
     RestaurantsModule, // Para verificar permisos del restaurante
   ],
   controllers: [DishesController],

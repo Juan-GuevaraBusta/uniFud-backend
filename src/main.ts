@@ -7,9 +7,13 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  
+  // Configurar WebSocket adapter para Socket.IO
+  app.useWebSocketAdapter(new IoAdapter(app));
   
    // Seguridad: Headers HTTP con Helmet
    app.use(helmet());

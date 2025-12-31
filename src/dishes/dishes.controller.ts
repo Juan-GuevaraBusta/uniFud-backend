@@ -12,6 +12,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/entities/user.entity';
 import { CreateToppingDto } from './dto/create-topping.dto';
 import { DishesQueryDto } from './dto/dishes-query.dto';
+import { DishSearchQueryDto } from './dto/dish-search-query.dto';
 
 @ApiTags('Platos')
 @Controller('dishes')
@@ -113,6 +114,122 @@ export class DishesController {
     }
 
     return await this.dishesService.findAll(query);
+  }
+
+  /**
+   * Búsqueda avanzada de platos
+   */
+  @Public()
+  @Get('search')
+  @ApiOperation({
+    summary: 'Búsqueda avanzada de platos',
+    description: 'Busca platos con filtros avanzados: restaurante, categoría, rango de precios y ordenamiento personalizable (precio, nombre, popularidad)',
+  })
+  @ApiQuery({
+    name: 'q',
+    required: true,
+    description: 'Texto de búsqueda por nombre del plato',
+    example: 'pizza',
+  })
+  @ApiQuery({
+    name: 'restaurantId',
+    required: false,
+    description: 'Filtrar por restaurante',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'categoria',
+    required: false,
+    description: 'Filtrar por categoría',
+    example: 'Pizza',
+  })
+  @ApiQuery({
+    name: 'precioMin',
+    required: false,
+    description: 'Precio mínimo en centavos',
+    type: Number,
+    example: 10000,
+  })
+  @ApiQuery({
+    name: 'precioMax',
+    required: false,
+    description: 'Precio máximo en centavos',
+    type: Number,
+    example: 50000,
+  })
+  @ApiQuery({
+    name: 'orderBy',
+    required: false,
+    enum: ['precio', 'nombre', 'popularidad'],
+    description: 'Campo por el cual ordenar (default: nombre)',
+    example: 'nombre',
+  })
+  @ApiQuery({
+    name: 'orderDirection',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Dirección del ordenamiento (default: ASC)',
+    example: 'ASC',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Número de página (por defecto 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Resultados por página (por defecto 20)',
+    example: 20,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de platos encontrados paginada',
+    schema: {
+      example: {
+        items: [
+          {
+            id: '123e4567-e89b-12d3-a456-426614174000',
+            nombre: 'Pizza Margarita',
+            precio: 15000,
+            categoria: 'Pizza',
+            activo: true,
+          },
+        ],
+        meta: {
+          total: 10,
+          limit: 20,
+          page: 1,
+          totalPages: 1,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Parámetros inválidos o texto de búsqueda faltante',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['El texto de búsqueda es requerido'],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
+  async search(@Query() query: DishSearchQueryDto) {
+    return await this.dishesService.searchAdvanced(query);
   }
 
   /**

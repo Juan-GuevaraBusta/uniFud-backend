@@ -15,6 +15,7 @@ import { BusinessException } from '../common/exceptions/business-exception';
 import { ForbiddenAccessException } from '../common/exceptions/unauthorized-exception';
 import { ResourceNotFoundException } from '../common/exceptions/not-found-exception';
 import { OrdersGateway } from './orders.gateway';
+import { OrderHistoryQueryDto, OrderHistoryOrderBy, OrderDirection } from './dto/order-history-query.dto';
 
 @Injectable()
 export class OrdersService {
@@ -512,6 +513,140 @@ export class OrdersService {
     }
 
     return fullOrder;
+  }
+
+  /**
+   * Obtener historial de pedidos con filtros avanzados
+   * @param userId - ID del usuario (obligatorio)
+   * @param filters - Filtros de búsqueda (fechas, status, ordenamiento)
+   * @param pagination - Parámetros de paginación
+   * @returns Historial de pedidos paginado
+   */
+  async getHistory(
+    userId: string,
+    filters: OrderHistoryQueryDto,
+    pagination?: PaginationDto,
+  ): Promise<PaginatedResponse<Order>> {
+    const query = this.orderRepository.createQueryBuilder('order');
+
+    // Filtro obligatorio por usuario
+    query.andWhere('order.userId = :userId', { userId });
+
+    // Aplicar filtros comunes
+    this.applyHistoryFilters(query, filters);
+
+    // Incluir relaciones
+    query
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.restaurant', 'restaurant');
+
+    // Aplicar ordenamiento
+    this.applyHistoryOrdering(query, filters);
+
+    // Aplicar paginación
+    if (pagination) {
+      query.skip(pagination.skip).take(pagination.take);
+    }
+
+    const [items, total] = await query.getManyAndCount();
+
+    return this.buildPaginatedResponse(items, total, pagination);
+  }
+
+  /**
+   * Obtener historial de pedidos de un restaurante con filtros avanzados
+   * @param restaurantId - ID del restaurante (obligatorio)
+   * @param actorId - ID del usuario que hace la consulta (para validar permisos)
+   * @param actorRole - Rol del usuario que hace la consulta
+   * @param filters - Filtros de búsqueda (fechas, status, ordenamiento)
+   * @param pagination - Parámetros de paginación
+   * @returns Historial de pedidos del restaurante paginado
+   */
+  async getRestaurantHistory(
+    restaurantId: string,
+    actorId: string,
+    actorRole: string,
+    filters: OrderHistoryQueryDto,
+    pagination?: PaginationDto,
+  ): Promise<PaginatedResponse<Order>> {
+    // Validar permisos
+    if (actorRole !== UserRole.ADMIN) {
+      const restaurant = await this.restaurantsService.findOne(restaurantId);
+      if (restaurant.ownerId !== actorId) {
+        throw new ForbiddenAccessException(
+          'No tienes permisos para ver el historial de pedidos de este restaurante',
+          'RESTAURANT_HISTORY_FORBIDDEN',
+        );
+      }
+    }
+
+    const query = this.orderRepository.createQueryBuilder('order');
+
+    // Filtro obligatorio por restaurante
+    query.andWhere('order.restaurantId = :restaurantId', { restaurantId });
+
+    // Aplicar filtros comunes
+    this.applyHistoryFilters(query, filters);
+
+    // Incluir relaciones
+    query
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.restaurant', 'restaurant');
+
+    // Aplicar ordenamiento
+    this.applyHistoryOrdering(query, filters);
+
+    // Aplicar paginación
+    if (pagination) {
+      query.skip(pagination.skip).take(pagination.take);
+    }
+
+    const [items, total] = await query.getManyAndCount();
+
+    return this.buildPaginatedResponse(items, total, pagination);
+  }
+
+  /**
+   * Aplicar filtros comunes al query builder del historial
+   */
+  private applyHistoryFilters(query: any, filters: OrderHistoryQueryDto): void {
+    // Filtro opcional por estado
+    if (filters.status) {
+      query.andWhere('order.status = :status', { status: filters.status });
+    }
+
+    // Filtro opcional por rango de fechas
+    if (filters.startDate && filters.endDate) {
+      query.andWhere('order.fechaPedido BETWEEN :startDate AND :endDate', {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+      });
+    } else if (filters.startDate) {
+      query.andWhere('order.fechaPedido >= :startDate', {
+        startDate: filters.startDate,
+      });
+    } else if (filters.endDate) {
+      query.andWhere('order.fechaPedido <= :endDate', {
+        endDate: filters.endDate,
+      });
+    }
+  }
+
+  /**
+   * Aplicar ordenamiento al query builder del historial
+   */
+  private applyHistoryOrdering(query: any, filters: OrderHistoryQueryDto): void {
+    const orderBy = filters.orderBy || OrderHistoryOrderBy.FECHA_PEDIDO;
+    const orderDirection = filters.orderDirection || OrderDirection.DESC;
+
+    // Mapear el campo de ordenamiento al nombre de columna correcto
+    const orderColumnMap: Record<OrderHistoryOrderBy, string> = {
+      [OrderHistoryOrderBy.FECHA_PEDIDO]: 'order.fechaPedido',
+      [OrderHistoryOrderBy.TOTAL]: 'order.total',
+      [OrderHistoryOrderBy.STATUS]: 'order.status',
+    };
+
+    query.orderBy(orderColumnMap[orderBy], orderDirection);
   }
 
   private buildPaginatedResponse<T>(

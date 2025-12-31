@@ -12,6 +12,7 @@ import { UserRole } from '../users/entities/user.entity';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { OrdersQueryDto } from './dto/orders-query.dto';
 import { OrdersRestaurantQueryDto } from './dto/orders-restaurant-query.dto';
+import { OrderHistoryQueryDto } from './dto/order-history-query.dto';
 
 @ApiTags('Pedidos')
 @Controller('orders')
@@ -611,5 +612,187 @@ export class OrdersController {
       cancelOrderDto.motivo,
       cancelOrderDto.comentariosRestaurante,
     );
+  }
+
+  /**
+   * Obtener historial de pedidos con filtros avanzados
+   */
+  @Get('history')
+  @Roles(UserRole.STUDENT, UserRole.RESTAURANT_OWNER, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Historial de pedidos',
+    description: 'Obtiene el historial de pedidos con filtros avanzados (fechas, estado, ordenamiento). Funciona automáticamente según el rol: estudiantes ven sus pedidos, restaurantes ven pedidos recibidos. Solo ADMIN puede especificar userId o restaurantId.',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    description: 'Fecha inicial del rango (ISO 8601)',
+    type: String,
+    example: '2024-01-01T00:00:00.000Z',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    description: 'Fecha final del rango (ISO 8601)',
+    type: String,
+    example: '2024-12-31T23:59:59.999Z',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: OrderStatus,
+    description: 'Filtrar por estado del pedido',
+  })
+  @ApiQuery({
+    name: 'orderBy',
+    required: false,
+    enum: ['fechaPedido', 'total', 'status'],
+    description: 'Campo por el cual ordenar (default: fechaPedido)',
+  })
+  @ApiQuery({
+    name: 'orderDirection',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Dirección del ordenamiento (default: DESC)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Número de página (por defecto 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Resultados por página (por defecto 20)',
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'restaurantId',
+    required: false,
+    description: 'ID del restaurante (solo para ADMIN, RESTAURANT_OWNER obtiene su restaurante automáticamente)',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'userId',
+    required: false,
+    description: 'ID del usuario (solo para ADMIN)',
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Historial de pedidos paginado',
+    schema: {
+      example: {
+        items: [
+          {
+            id: '123e4567-e89b-12d3-a456-426614174000',
+            numeroOrden: '#ABC-123',
+            status: 'ENTREGADO',
+            total: 15750,
+            fechaPedido: '2024-01-15T10:30:00.000Z',
+          },
+        ],
+        meta: {
+          total: 50,
+          limit: 20,
+          page: 1,
+          totalPages: 3,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Parámetros inválidos o rango de fechas inválido',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'El rango de fechas es inválido (startDate > endDate)',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado para ver este historial',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para ver el historial de pedidos de este restaurante',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
+  async getHistory(
+    @CurrentUser() user: any,
+    @Query() query: OrderHistoryQueryDto,
+  ) {
+    // Validar rango de fechas si ambos están presentes
+    if (query.startDate && query.endDate && query.startDate > query.endDate) {
+      throw new BadRequestException('El rango de fechas es inválido (startDate > endDate)');
+    }
+
+    // Para estudiantes: solo pueden ver su propio historial
+    if (user.role === UserRole.STUDENT) {
+      return await this.ordersService.getHistory(user.id, query, query);
+    }
+
+    // Para propietarios de restaurantes: obtener su restaurante automáticamente
+    if (user.role === UserRole.RESTAURANT_OWNER) {
+      const restaurant = await this.restaurantsService.findByOwner(user.id);
+      
+      if (!restaurant) {
+        throw new BadRequestException('No tienes un restaurante registrado');
+      }
+      
+      return await this.ordersService.getRestaurantHistory(
+        restaurant.id,
+        user.id,
+        user.role,
+        query,
+        query,
+      );
+    }
+
+    // Para administradores: pueden ver historial de cualquier usuario o restaurante
+    if (query.userId) {
+      // Ver historial de un usuario específico
+      return await this.ordersService.getHistory(query.userId, query, query);
+    } else if (query.restaurantId) {
+      // Ver historial de un restaurante específico
+      return await this.ordersService.getRestaurantHistory(
+        query.restaurantId,
+        user.id,
+        user.role,
+        query,
+        query,
+      );
+    } else {
+      // Sin filtros específicos, ver historial del admin (sus propios pedidos si tiene)
+      return await this.ordersService.getHistory(user.id, query, query);
+    }
   }
 }

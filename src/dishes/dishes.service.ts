@@ -16,6 +16,8 @@ import { PaginatedResponse } from '../common/interfaces/paginated-response.inter
 import { BusinessException } from '../common/exceptions/business-exception';
 import { ForbiddenAccessException } from '../common/exceptions/unauthorized-exception';
 import { ResourceNotFoundException } from '../common/exceptions/not-found-exception';
+import { DishSearchQueryDto, DishSearchOrderBy, DishSearchOrderDirection } from './dto/dish-search-query.dto';
+import { Order, OrderStatus } from '../orders/entities/order.entity';
 
 @Injectable()
 export class DishesService {
@@ -26,6 +28,8 @@ export class DishesService {
     private readonly toppingRepository: Repository<Topping>,
     @InjectRepository(DishAvailability)
     private readonly availabilityRepository: Repository<DishAvailability>,
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
     private readonly restaurantsService: RestaurantsService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
@@ -359,7 +363,7 @@ export class DishesService {
   }
 
   /**
-   * Buscar platos por nombre
+   * Buscar platos por nombre (método legacy - mantener compatibilidad)
    */
   async search(query: string, pagination?: PaginationDto): Promise<PaginatedResponse<Dish>> {
     const qb = this.dishRepository
@@ -377,6 +381,100 @@ export class DishesService {
     const [items, total] = await qb.getManyAndCount();
 
     return this.buildPaginatedResponse(items, total, pagination);
+  }
+
+  /**
+   * Búsqueda avanzada de platos con filtros y ordenamiento
+   */
+  async searchAdvanced(
+    searchDto: DishSearchQueryDto,
+  ): Promise<PaginatedResponse<Dish>> {
+    const query = this.dishRepository.createQueryBuilder('dish');
+
+    // Búsqueda por nombre
+    query.where('dish.nombre ILIKE :searchQuery', {
+      searchQuery: `%${searchDto.q}%`,
+    });
+
+    // Solo platos activos
+    query.andWhere('dish.activo = :activo', { activo: true });
+
+    // Filtro por restaurante
+    if (searchDto.restaurantId) {
+      query.andWhere('dish.restaurantId = :restaurantId', {
+        restaurantId: searchDto.restaurantId,
+      });
+    }
+
+    // Filtro por categoría
+    if (searchDto.categoria) {
+      query.andWhere('dish.categoria = :categoria', {
+        categoria: searchDto.categoria,
+      });
+    }
+
+    // Filtro por rango de precios
+    if (searchDto.precioMin !== undefined && searchDto.precioMax !== undefined) {
+      query.andWhere('dish.precio BETWEEN :precioMin AND :precioMax', {
+        precioMin: searchDto.precioMin,
+        precioMax: searchDto.precioMax,
+      });
+    } else if (searchDto.precioMin !== undefined) {
+      query.andWhere('dish.precio >= :precioMin', {
+        precioMin: searchDto.precioMin,
+      });
+    } else if (searchDto.precioMax !== undefined) {
+      query.andWhere('dish.precio <= :precioMax', {
+        precioMax: searchDto.precioMax,
+      });
+    }
+
+    // Incluir relaciones
+    query
+      .leftJoinAndSelect('dish.restaurant', 'restaurant')
+      .leftJoinAndSelect('dish.toppings', 'toppings');
+
+    // Ordenamiento
+    const orderBy = searchDto.orderBy || DishSearchOrderBy.NOMBRE;
+    const orderDirection = searchDto.orderDirection || DishSearchOrderDirection.ASC;
+
+    if (orderBy === DishSearchOrderBy.POPULARIDAD) {
+      // Para popularidad, usamos SQL raw para contar pedidos entregados que contengan este plato
+      // La subquery cuenta cuántos pedidos entregados tienen este dishId en sus items
+      query
+        .addSelect(
+          `(
+            SELECT COUNT(DISTINCT o.id)
+            FROM orders o
+            WHERE o.status = 'entregado'
+            AND EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(o.items) AS item
+              WHERE (item->>'dishId')::uuid = dish.id
+            )
+          )`,
+          'popularity_count',
+        )
+        .orderBy('popularity_count', orderDirection)
+        .addOrderBy('dish.nombre', 'ASC');
+    } else {
+      // Ordenamiento por precio o nombre
+      const orderColumnMap: Record<DishSearchOrderBy, string> = {
+        [DishSearchOrderBy.PRECIO]: 'dish.precio',
+        [DishSearchOrderBy.NOMBRE]: 'dish.nombre',
+        [DishSearchOrderBy.POPULARIDAD]: 'dish.nombre', // Fallback, no debería usarse aquí
+      };
+      query.orderBy(orderColumnMap[orderBy], orderDirection);
+    }
+
+    // Aplicar paginación
+    if (searchDto) {
+      query.skip(searchDto.skip).take(searchDto.take);
+    }
+
+    const [items, total] = await query.getManyAndCount();
+
+    return this.buildPaginatedResponse(items, total, searchDto);
   }
 
   // ==================== MÉTODOS DE DISPONIBILIDAD ====================
