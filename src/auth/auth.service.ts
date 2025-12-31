@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Inject, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -9,13 +9,18 @@ import { ConfirmEmailDto } from './dto/confirm-email.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from '../users/entities/user.entity';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { Logger as WinstonLogger } from 'winston';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    @Inject(WINSTON_MODULE_PROVIDER) private readonly winstonLogger: WinstonLogger,
   ) {}
 
   /**
@@ -37,12 +42,15 @@ export class AuthService {
     await this.usersService.setVerificationCode(user.id, verificationCode);
 
     // TODO: Enviar email con código de verificación
-    // Por ahora, lo mostramos en consola para desarrollo
-    console.log(`\n========================================`);
-    console.log(`CÓDIGO DE VERIFICACIÓN PARA: ${user.email}`);
-    console.log(`CÓDIGO: ${verificationCode}`);
-    console.log(`Este código expira en 24 horas`);
-    console.log(`========================================\n`);
+    // Por ahora, lo logueamos para desarrollo
+    this.logger.log(`Código de verificación generado para: ${user.email}`, 'AuthService');
+    this.winstonLogger.info('Código de verificación generado', {
+      context: AuthService.name,
+      action: 'register',
+      userId: user.id,
+      userEmail: user.email,
+      verificationCode,
+    });
 
     return {
       message: 'Usuario registrado exitosamente. Por favor verifica tu email.',
@@ -144,11 +152,15 @@ export class AuthService {
     await this.usersService.setVerificationCode(user.id, verificationCode);
 
     // TODO: Enviar email con código de verificación
-    console.log(`\n========================================`);
-    console.log(`NUEVO CÓDIGO DE VERIFICACIÓN PARA: ${user.email}`);
-    console.log(`CÓDIGO: ${verificationCode}`);
-    console.log(`Este código expira en 24 horas`);
-    console.log(`========================================\n`);
+    // Por ahora, lo logueamos para desarrollo
+    this.logger.log(`Nuevo código de verificación generado para: ${user.email}`, 'AuthService');
+    this.winstonLogger.info('Nuevo código de verificación generado', {
+      context: AuthService.name,
+      action: 'resendVerificationCode',
+      userId: user.id,
+      userEmail: user.email,
+      verificationCode,
+    });
 
     return {
       message: 'Código de verificación reenviado exitosamente',

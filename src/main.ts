@@ -8,9 +8,21 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import { WinstonModule } from 'nest-winston';
+import { loggerConfig } from './config/logger.config';
+import * as fs from 'fs';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Crear directorio de logs si no existe
+  const logsDir = join(process.cwd(), 'logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger(loggerConfig),
+  });
   
   // Configurar WebSocket adapter para Socket.IO
   app.useWebSocketAdapter(new IoAdapter(app));
@@ -49,10 +61,10 @@ async function bootstrap() {
 
    app.useGlobalInterceptors(
      new ClassSerializerInterceptor(app.get(Reflector)),
-     new LoggingInterceptor(),
+     app.get(LoggingInterceptor),
      new TransformInterceptor(),
    );
-   app.useGlobalFilters(new AllExceptionsFilter());
+   app.useGlobalFilters(app.get(AllExceptionsFilter));
 
    // Configuración de Swagger
    const config = new DocumentBuilder()
@@ -72,9 +84,12 @@ async function bootstrap() {
    const document = SwaggerModule.createDocument(app, config);
    SwaggerModule.setup('api/docs', app, document);
 
-   console.log(`\n🚀 Servidor iniciado en http://localhost:${process.env.PORT ?? 3000}`);
-   console.log(`📚 Documentación Swagger disponible en http://localhost:${process.env.PORT ?? 3000}/api/docs\n`);
+   const port = process.env.PORT ?? 3000;
+   const logger = app.get('NestWinstonLogger') || console;
+   
+   logger.log(`Servidor iniciado en http://localhost:${port}`, 'Bootstrap');
+   logger.log(`Documentación Swagger disponible en http://localhost:${port}/api/docs`, 'Bootstrap');
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(port);
 }
 bootstrap();
