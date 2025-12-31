@@ -1,11 +1,13 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
+import { User, UserRole } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
+import { isValidRole } from '../common/constants/roles.constant';
 
 @Injectable()
 export class UsersService {
@@ -97,6 +99,31 @@ export class UsersService {
   async remove(id: string): Promise<void> {
     const user = await this.findOne(id);
     await this.userRepository.remove(user);
+  }
+
+  /**
+   * Cambiar el rol de un usuario (solo para administradores)
+   * @param userId - ID del usuario a modificar
+   * @param updateRoleDto - DTO con el nuevo rol
+   * @returns Usuario actualizado
+   */
+  async updateRole(userId: string, updateRoleDto: UpdateRoleDto): Promise<User> {
+    const user = await this.findOne(userId);
+
+    // Validar que el rol sea válido
+    if (!isValidRole(updateRoleDto.role)) {
+      throw new BadRequestException(`Rol inválido: ${updateRoleDto.role}`);
+    }
+
+    // No permitir cambiar el rol si el usuario ya tiene ese rol
+    if (user.role === updateRoleDto.role) {
+      throw new BadRequestException(`El usuario ya tiene el rol ${updateRoleDto.role}`);
+    }
+
+    // Actualizar el rol
+    user.role = updateRoleDto.role;
+
+    return await this.userRepository.save(user);
   }
 }
 

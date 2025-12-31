@@ -1,20 +1,26 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, HttpCode, HttpStatus, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { RestaurantsService } from './restaurants.service';
+import { StatisticsService } from './statistics.service';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { RestaurantResponseDto } from './dto/restaurant-response.dto';
+import { DateRangeDto } from './dto/date-range.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/entities/user.entity';
+import { ForbiddenAccessException } from '../common/exceptions/unauthorized-exception';
 
 @ApiTags('Restaurantes')
 @Controller('restaurants')
 @UseGuards(RolesGuard)
 export class RestaurantsController {
-  constructor(private readonly restaurantsService: RestaurantsService) {}
+  constructor(
+    private readonly restaurantsService: RestaurantsService,
+    private readonly statisticsService: StatisticsService,
+  ) {}
 
   /**
    * Crear un nuevo restaurante
@@ -412,6 +418,134 @@ export class RestaurantsController {
     @CurrentUser() user: any,
   ) {
     await this.restaurantsService.remove(id, user.id, user.role);
+  }
+
+  /**
+   * Obtener estadísticas de un restaurante
+   */
+  @Get(':id/statistics')
+  @Roles(UserRole.RESTAURANT_OWNER, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Obtener estadísticas del restaurante',
+    description: 'Obtiene estadísticas detalladas del restaurante: total de pedidos, ingresos, pedidos por estado y platos más populares. Solo disponible para dueños del restaurante y administradores.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID único del restaurante (UUID)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    description: 'Fecha de inicio del rango (ISO 8601)',
+    example: '2024-01-01T00:00:00.000Z',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    description: 'Fecha de fin del rango (ISO 8601)',
+    example: '2024-12-31T23:59:59.999Z',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'popularDishesLimit',
+    required: false,
+    description: 'Número máximo de platos populares a retornar',
+    example: 10,
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Estadísticas del restaurante',
+    schema: {
+      example: {
+        totalOrders: 150,
+        totalRevenue: 15000000,
+        ordersByStatus: {
+          pendiente: 5,
+          aceptado: 3,
+          preparando: 2,
+          listo: 1,
+          entregado: 130,
+          cancelado: 9,
+        },
+        popularDishes: [
+          {
+            dishId: '123e4567-e89b-12d3-a456-426614174000',
+            dishNombre: 'Hamburguesa Clásica',
+            totalOrders: 45,
+            totalQuantity: 50,
+            totalRevenue: 5000000,
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permisos para ver estas estadísticas',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Restaurante no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Restaurante con ID 123e4567-e89b-12d3-a456-426614174000 no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
+  async getStatistics(
+    @Param('id') id: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('popularDishesLimit') popularDishesLimit?: string,
+    @CurrentUser() user?: any,
+  ) {
+    // Verificar permisos: solo el dueño del restaurante o admin pueden ver estadísticas
+    const restaurant = await this.restaurantsService.findOne(id);
+    
+    if (user.role !== UserRole.ADMIN && restaurant.ownerId !== user.id) {
+      throw new ForbiddenAccessException('No tienes permisos para ver las estadísticas de este restaurante', 'RESTAURANT_STATISTICS_FORBIDDEN');
+    }
+
+    const dateRange: DateRangeDto | undefined = 
+      startDate && endDate ? { startDate, endDate } : undefined;
+    
+    const limit = popularDishesLimit ? parseInt(popularDishesLimit, 10) : 10;
+
+    return await this.statisticsService.getRestaurantStatistics(id, dateRange, limit);
   }
 }
 

@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, ClassSerializerInterceptor, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, ClassSerializerInterceptor, Query, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { AdminGuard } from '../common/guards/admin.guard';
 
 @ApiTags('Usuarios')
 @Controller('users')
@@ -323,6 +325,85 @@ export class UsersController {
   })
   async remove(@Param('id') id: string) {
     return this.usersService.remove(id);
+  }
+
+  /**
+   * Cambiar el rol de un usuario (solo administradores)
+   */
+  @Patch(':id/role')
+  @UseGuards(AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Cambiar rol de usuario',
+    description: 'Cambia el rol de un usuario. Solo disponible para administradores.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID único del usuario (UUID)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Rol actualizado exitosamente',
+    type: UserResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Rol inválido o el usuario ya tiene ese rol',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'El usuario ya tiene el rol restaurant_owner',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autenticado',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado (solo administradores)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Solo los administradores pueden acceder a este recurso',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Usuario con ID 123e4567-e89b-12d3-a456-426614174000 no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Error interno del servidor',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Error interno del servidor',
+        error: 'Internal Server Error',
+      },
+    },
+  })
+  async updateRole(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
+    return this.usersService.updateRole(id, updateRoleDto);
   }
 }
 

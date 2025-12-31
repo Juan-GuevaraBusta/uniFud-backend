@@ -555,3 +555,4 @@ Agregar `JWT_SECRET` al archivo `.env`.
 **Última actualización**: Enero 2024
 
 
+
