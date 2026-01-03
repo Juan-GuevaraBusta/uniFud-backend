@@ -3,6 +3,7 @@ import * as bcrypt from 'bcrypt';
 import {Exclude} from 'class-transformer';
 import { Order } from '../../orders/entities/order.entity';
 import { NotificationToken } from '../../notifications/entities/notification-token.entity';
+import { UserCard } from '../../payments/entities/user-card.entity';
 
 export enum UserRole {
     STUDENT = 'student',
@@ -48,6 +49,9 @@ export class User {
 
     @OneToMany(() => NotificationToken, (token) => token.user)
     notificationTokens: NotificationToken[];
+
+    @OneToMany(() => UserCard, (card) => card.user)
+    cards: UserCard[];
 
     @CreateDateColumn()
     createdAt: Date;

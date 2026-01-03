@@ -30,6 +30,14 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   comentariosCliente?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID del Payment Source (tarjeta) a usar para el pago. Si no se proporciona, se usa la tarjeta por defecto',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'El ID del Payment Source debe ser un UUID válido' })
+  paymentSourceId?: string;
 }
 
 

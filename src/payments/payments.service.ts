@@ -1,0 +1,208 @@
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { WompiClient, WompiTransaction, WompiWebhookEvent } from './providers/wompi.client';
+import { UserCardsService } from './user-cards.service';
+import { UsersService } from '../users/users.service';
+import { Payment, PaymentStatus } from './entities/payment.entity';
+
+export interface ProcessPaymentResult {
+  transactionId: string;
+  status: string;
+  reference: string;
+  amountInCents: number;
+}
+
+@Injectable()
+export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
+  constructor(
+    @InjectRepository(Payment)
+    private readonly paymentRepository: Repository<Payment>,
+    private readonly wompiClient: WompiClient,
+    private readonly userCardsService: UserCardsService,
+    private readonly usersService: UsersService,
+  ) {}
+
+  /**
+   * Mapear estado de Wompi (string) a PaymentStatus (enum)
+   * @param wompiStatus Estado de la transacción de Wompi
+   * @returns PaymentStatus correspondiente
+   */
+  private mapWompiStatusToPaymentStatus(wompiStatus: string): PaymentStatus {
+    const statusMap: Record<string, PaymentStatus> = {
+      APPROVED: PaymentStatus.APPROVED,
+      DECLINED: PaymentStatus.DECLINED,
+      PENDING: PaymentStatus.PENDING,
+      VOIDED: PaymentStatus.VOIDED,
+    };
+
+    return statusMap[wompiStatus] || PaymentStatus.ERROR;
+  }
+
+  /**
+   * Procesar pago de un pedido
+   * Crea una transacción en Wompi usando el Payment Source del usuario
+   * @param userId ID del usuario
+   * @param amount Monto en pesos colombianos
+   * @param paymentSourceId ID del Payment Source (opcional, si no se proporciona usa la tarjeta default)
+   * @param orderId ID del pedido (para generar referencia única)
+   */
+  async processOrderPayment(
+    userId: string,
+    amount: number,
+    paymentSourceId?: string,
+    orderId?: string,
+  ): Promise<ProcessPaymentResult> {
+    this.logger.log(`Procesando pago para usuario ${userId}, monto: ${amount} COP`);
+
+    // 1. Obtener usuario para email
+    const user = await this.usersService.findOne(userId);
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    // 2. Obtener Payment Source
+    let paymentSource;
+    if (paymentSourceId) {
+      const card = await this.userCardsService.getCardById(paymentSourceId, userId);
+      paymentSource = card.wompiPaymentSourceId;
+    } else {
+      // Usar tarjeta default
+      const defaultCard = await this.userCardsService.getDefaultCard(userId);
+      if (!defaultCard) {
+        throw new BadRequestException('No tienes una tarjeta configurada. Por favor, agrega una tarjeta primero.');
+      }
+      paymentSource = defaultCard.wompiPaymentSourceId;
+    }
+
+    // 3. Generar referencia única con formato UFD-XXX
+    const reference = this.generatePaymentReference(orderId);
+
+    // 4. Crear transacción en Wompi
+    let transaction: WompiTransaction;
+    try {
+      transaction = await this.wompiClient.createTransaction(
+        paymentSource,
+        amount,
+        reference,
+        user.email,
+      );
+      this.logger.log(`✅ Transacción creada: ${transaction.id} - Status: ${transaction.status}`);
+    } catch (error: any) {
+      this.logger.error(`❌ Error creando transacción: ${error.message}`);
+      throw new BadRequestException('Error al procesar el pago. Por favor, intenta nuevamente.');
+    }
+
+    // 5. Guardar registro de pago en BD (orderId se actualizará después de crear el pedido)
+    const payment = this.paymentRepository.create({
+      userId,
+      orderId: orderId || null,
+      wompiTransactionId: transaction.id,
+      reference,
+      amountInCents: transaction.amount_in_cents,
+      currency: transaction.currency,
+      status: this.mapWompiStatusToPaymentStatus(transaction.status),
+      paymentSourceId: paymentSource,
+    });
+
+    const savedPayment = await this.paymentRepository.save(payment);
+
+    // 6. Validar que el pago fue aprobado
+    if (payment.status !== PaymentStatus.APPROVED) {
+      this.logger.warn(`⚠️ Transacción no aprobada: ${transaction.id} - Status: ${transaction.status}`);
+      throw new BadRequestException(
+        transaction.status_message || 'El pago no pudo ser procesado. Por favor, verifica tu tarjeta.'
+      );
+    }
+
+    return {
+      transactionId: transaction.id,
+      status: transaction.status,
+      reference,
+      amountInCents: transaction.amount_in_cents,
+    };
+  }
+
+  /**
+   * Manejar webhook de Wompi
+   * Actualiza el estado de la transacción cuando Wompi notifica cambios
+   */
+  async handleWebhook(event: WompiWebhookEvent, signature: string): Promise<void> {
+    this.logger.log(`Recibido webhook de Wompi: ${event.event.type} - Transaction: ${event.data.transaction.id}`);
+
+    // 1. Verificar firma del webhook
+    const isValid = this.wompiClient.verifyWebhookSignature(event, signature);
+    if (!isValid) {
+      this.logger.error('❌ Firma de webhook inválida');
+      throw new BadRequestException('Firma de webhook inválida');
+    }
+
+    // 2. Buscar pago por transaction ID
+    const transaction = event.data.transaction;
+    const payment = await this.paymentRepository.findOne({
+      where: { wompiTransactionId: transaction.id },
+    });
+
+    if (!payment) {
+      this.logger.warn(`⚠️ Pago no encontrado para transacción: ${transaction.id}`);
+      return;
+    }
+
+    // 3. Actualizar estado del pago
+    payment.status = this.mapWompiStatusToPaymentStatus(transaction.status);
+    if (transaction.finalized_at) {
+      payment.finalizedAt = new Date(transaction.finalized_at);
+    }
+
+    await this.paymentRepository.save(payment);
+
+    this.logger.log(`✅ Estado de pago actualizado: ${payment.id} - Status: ${payment.status}`);
+  }
+
+  /**
+   * Generar referencia única con formato UFD-XXX
+   * @param orderNumber Número de orden (formato #ABC-123) o ID del pedido (opcional)
+   */
+  private generatePaymentReference(orderNumber?: string): string {
+    if (orderNumber) {
+      // Si es un número de orden (formato #ABC-123), extraer la parte numérica
+      if (orderNumber.startsWith('#')) {
+        const match = orderNumber.match(/-(\d+)$/);
+        if (match && match[1]) {
+          return `UFD-${match[1]}`;
+        }
+      }
+      // Si es un UUID, usar los últimos 6 caracteres numéricos
+      const numericPart = orderNumber.replace(/-/g, '').replace(/[^0-9]/g, '').slice(-6);
+      if (numericPart.length >= 3) {
+        return `UFD-${numericPart}`;
+      }
+    }
+    
+    // Si no hay orderNumber o no se pudo extraer, usar timestamp
+    const timestamp = Date.now().toString().slice(-6);
+    return `UFD-${timestamp}`;
+  }
+
+  /**
+   * Obtener pago por ID de transacción de Wompi
+   */
+  async getPaymentByTransactionId(transactionId: string): Promise<Payment | null> {
+    return this.paymentRepository.findOne({
+      where: { wompiTransactionId: transactionId },
+    });
+  }
+
+  /**
+   * Actualizar orderId de un pago después de crear el pedido
+   */
+  async updatePaymentOrderId(transactionId: string, orderId: string): Promise<void> {
+    await this.paymentRepository.update(
+      { wompiTransactionId: transactionId },
+      { orderId },
+    );
+  }
+}
+

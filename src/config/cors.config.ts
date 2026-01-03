@@ -1,4 +1,4 @@
-export const corsConfig ={
+export const corsConfig = {
     development: {
         origin: [
             'http://localhost:19006',
@@ -9,13 +9,24 @@ export const corsConfig ={
         ],
         credentials: true,
     },
-    production: {
-        origin: '*',
-        credentials: false,
-    },
     staging: {
-        origin: '*',
-        credentials: false,
+        origin: [
+            process.env.STAGING_BACKEND_URL || 'https://staging-api.unifoodapp.com',
+            process.env.STAGING_WEB_URL || 'https://staging.unifoodapp.com',
+            /^exp:\/\/.*$/,
+            /^unifoodapp:\/\/.*$/,
+        ],
+        credentials: true,
+    },
+    production: {
+        origin: [
+            process.env.PRODUCTION_BACKEND_URL || 'https://api.unifoodapp.com',
+            process.env.PRODUCTION_WEB_URL || 'https://unifoodapp.com',
+            'unifoodapp://',
+            'exp://expo.io/@unifoodapp/unifoodapp',
+            /^unifoodapp:\/\/.*$/,
+        ],
+        credentials: true,
     },
 };
 

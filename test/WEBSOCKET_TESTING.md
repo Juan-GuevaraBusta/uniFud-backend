@@ -279,3 +279,5 @@ Después de verificar que los WebSockets funcionan:
 **Estado**: Documentación completa y scripts de testing listos ✅
 
 
+
+

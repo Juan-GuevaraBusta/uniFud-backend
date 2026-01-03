@@ -16,6 +16,7 @@ import { DishesModule } from './dishes/dishes.module';
 import { OrdersModule } from './orders/orders.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
+import { PaymentsModule } from './payments/payments.module';
 import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { WinstonModule } from 'nest-winston';
@@ -56,6 +57,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     OrdersModule,
     NotificationsModule,
     HealthModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [

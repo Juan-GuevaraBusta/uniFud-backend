@@ -236,3 +236,5 @@ Si Redis no está disponible, el sistema automáticamente usa caché en memoria.
 **Estado**: Configuración completa y lista para usar ✅
 
 
+
+

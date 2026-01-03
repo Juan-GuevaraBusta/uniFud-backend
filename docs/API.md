@@ -198,6 +198,17 @@ curl -X POST http://localhost:3000/auth/refresh \
 | DELETE | `/notifications` | Desactivar todos los tokens | ✅ Requerido |
 | POST | `/notifications/send` | Enviar notificación manual | ✅ Requerido (admin/owner) |
 
+### Pagos (`/payments`)
+
+| Método | Endpoint | Descripción | Autenticación |
+|--------|----------|-------------|---------------|
+| POST | `/payments/cards` | Agregar nueva tarjeta | ✅ Requerido |
+| GET | `/payments/cards` | Listar mis tarjetas | ✅ Requerido |
+| GET | `/payments/cards/:id` | Obtener tarjeta específica | ✅ Requerido |
+| PATCH | `/payments/cards/:id/default` | Marcar tarjeta como default | ✅ Requerido |
+| DELETE | `/payments/cards/:id` | Eliminar tarjeta | ✅ Requerido |
+| POST | `/payments/webhooks` | Webhook de Wompi | ❌ No requerido (firma requerida) |
+
 ---
 
 ## Ejemplos de Uso
@@ -341,6 +352,15 @@ Todos los errores siguen este formato:
 - `RESTAURANT_ALREADY_EXISTS`: Ya tienes un restaurante
 - `RESTAURANT_NAME_DUPLICATE`: Nombre duplicado en la universidad
 - `RESTAURANT_NOT_OWNED`: No eres dueño de este restaurante
+
+#### Pagos
+
+- `PAYMENT_CARD_NOT_FOUND`: Tarjeta no encontrada
+- `PAYMENT_NO_DEFAULT_CARD`: No tienes una tarjeta configurada
+- `PAYMENT_CANNOT_DELETE_ONLY_CARD`: No puedes eliminar tu única tarjeta
+- `PAYMENT_TRANSACTION_FAILED`: Error al procesar el pago
+- `PAYMENT_WEBHOOK_INVALID_SIGNATURE`: Firma de webhook inválida
+- `PAYMENT_CARD_CREATION_FAILED`: Error al crear tarjeta en Wompi
 
 ---
 

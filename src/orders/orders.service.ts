@@ -16,6 +16,7 @@ import { ForbiddenAccessException } from '../common/exceptions/unauthorized-exce
 import { ResourceNotFoundException } from '../common/exceptions/not-found-exception';
 import { OrdersGateway } from './orders.gateway';
 import { OrderHistoryQueryDto, OrderHistoryOrderBy, OrderDirection } from './dto/order-history-query.dto';
+import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
 export class OrdersService {
@@ -28,6 +29,7 @@ export class OrdersService {
     private readonly dishesService: DishesService,
     private readonly notificationsService: NotificationsService,
     private readonly ordersGateway: OrdersGateway,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   private readonly statusTransitions: Record<OrderStatus, OrderStatus[]> = {
@@ -118,10 +120,37 @@ export class OrdersService {
     // 4. Calcular totales
     const { subtotal, tarifaServicio, total } = this.calculateTotals(createOrderDto.items);
 
-    // 5. Generar número de orden único
+    // 5. Generar número de orden único (temporal para referencia de pago)
     const numeroOrden = await this.generateOrderNumber();
 
-    // 6. Crear el pedido
+    // 6. PROCESAR PAGO ANTES DE CREAR EL PEDIDO
+    // Convertir total de centavos a pesos para Wompi
+    const totalInPesos = total / 100;
+    
+    let paymentResult;
+    try {
+      paymentResult = await this.paymentsService.processOrderPayment(
+        userId,
+        totalInPesos,
+        createOrderDto.paymentSourceId,
+        numeroOrden, // Usar número de orden como referencia temporal
+      );
+      this.logger.log(`✅ Pago procesado exitosamente: ${paymentResult.transactionId}`);
+    } catch (error: any) {
+      this.logger.error(`❌ Error procesando pago: ${error.message}`);
+      // Si el pago falla, NO crear el pedido
+      throw new BusinessException(
+        error.message || 'El pago no pudo ser procesado. El pedido no fue creado.',
+        'PAYMENT_FAILED',
+        {
+          userId,
+          restaurantId: createOrderDto.restaurantId,
+          total,
+        },
+      );
+    }
+
+    // 7. Crear el pedido (solo si el pago fue exitoso)
     const order = this.orderRepository.create({
       ...createOrderDto,
       userId,
@@ -132,18 +161,26 @@ export class OrdersService {
       status: OrderStatus.PENDIENTE,
     });
 
-    // 7. Guardar y retornar con relaciones
+    // 8. Guardar y retornar con relaciones
     const savedOrder = await this.orderRepository.save(order);
     const fullOrder = await this.findOne(savedOrder.id);
 
-    // 8. Notificar vía push notification (no bloquea si falla)
+    // 8.1. Actualizar payment con el orderId real
+    try {
+      await this.paymentsService.updatePaymentOrderId(paymentResult.transactionId, savedOrder.id);
+    } catch (error) {
+      this.logger.error(`Error al actualizar orderId en payment: ${error}`);
+      // No fallar el pedido si esto falla, ya está creado
+    }
+
+    // 9. Notificar vía push notification (no bloquea si falla)
     try {
       await this.notificationsService.notifyNewOrder(fullOrder);
     } catch (error) {
       this.logger.error(`Error al enviar notificación push para pedido ${fullOrder.id}:`, error);
     }
 
-    // 9. Notificar vía WebSocket (no bloquea si falla)
+    // 10. Notificar vía WebSocket (no bloquea si falla)
     try {
       this.ordersGateway.notifyNewOrder(fullOrder);
     } catch (error) {

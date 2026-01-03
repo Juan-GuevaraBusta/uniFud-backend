@@ -7,6 +7,7 @@ import { DishesModule } from '../dishes/dishes.module';
 import { OrdersController } from './orders.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersGateway } from './orders.gateway';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { OrdersGateway } from './orders.gateway';
     RestaurantsModule,
     DishesModule,
     NotificationsModule,
+    PaymentsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrdersGateway],
