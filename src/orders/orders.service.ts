@@ -43,9 +43,17 @@ export class OrdersService {
 
   /**
    * Crear un nuevo pedido
+   * Flujo completo:
+   * 1. Validar restaurante
+   * 2. Validar disponibilidad
+   * 3. Calcular totales
+   * 4. PROCESAR PAGO CON WOMPI (antes de crear pedido)
+   * 5. Crear pedido (solo si pago exitoso)
+   * 6. Guardar relación Payment → Order
+   * 7. Notificar restaurante
    */
   async create(createOrderDto: CreateOrderDto, userId: string): Promise<Order> {
-    // 1. Verificar que el restaurante existe y está activo
+    // 1. Validar restaurante
     const restaurant = await this.restaurantsService.findOne(createOrderDto.restaurantId);
     
     if (!restaurant.activo) {
@@ -54,7 +62,7 @@ export class OrdersService {
       });
     }
 
-    // 2. Verificar que el usuario no tenga un pedido PENDIENTE en el mismo restaurante
+    // 1.1 Verificar que no haya pedidos pendientes duplicados
     const pendingOrder = await this.orderRepository.findOne({
       where: {
         userId,
@@ -74,7 +82,7 @@ export class OrdersService {
       );
     }
 
-    // 3. Validar disponibilidad de cada plato
+    // 2. Validar disponibilidad de cada plato
     for (const item of createOrderDto.items) {
       const isAvailable = await this.dishesService.checkAvailability(
         item.dishId,
@@ -117,14 +125,17 @@ export class OrdersService {
       }
     }
 
-    // 4. Calcular totales
+    // 3. Calcular totales
     const { subtotal, tarifaServicio, total } = this.calculateTotals(createOrderDto.items);
 
-    // 5. Generar número de orden único (temporal para referencia de pago)
+    // Generar número de orden único (temporal para referencia de pago)
     const numeroOrden = await this.generateOrderNumber();
 
-    // 6. PROCESAR PAGO ANTES DE CREAR EL PEDIDO
-    // Convertir total de centavos a pesos para Wompi
+    // 4. PROCESAR PAGO CON WOMPI (antes de crear el pedido)
+    // - Obtener tarjeta del usuario (default o especificada en paymentSourceId)
+    // - Crear transacción en Wompi
+    // - Si pago falla → lanzar excepción (NO crear pedido)
+    // - Si pago exitoso → continuar
     const totalInPesos = total / 100;
     
     let paymentResult;
@@ -132,7 +143,7 @@ export class OrdersService {
       paymentResult = await this.paymentsService.processOrderPayment(
         userId,
         totalInPesos,
-        createOrderDto.paymentSourceId,
+        createOrderDto.paymentSourceId, // Si no se proporciona, usa la tarjeta default
         numeroOrden, // Usar número de orden como referencia temporal
       );
       this.logger.log(`✅ Pago procesado exitosamente: ${paymentResult.transactionId}`);
@@ -150,7 +161,7 @@ export class OrdersService {
       );
     }
 
-    // 7. Crear el pedido (solo si el pago fue exitoso)
+    // 5. Crear pedido (solo si el pago fue exitoso)
     const order = this.orderRepository.create({
       ...createOrderDto,
       userId,
@@ -161,11 +172,11 @@ export class OrdersService {
       status: OrderStatus.PENDIENTE,
     });
 
-    // 8. Guardar y retornar con relaciones
+    // Guardar y retornar con relaciones
     const savedOrder = await this.orderRepository.save(order);
     const fullOrder = await this.findOne(savedOrder.id);
 
-    // 8.1. Actualizar payment con el orderId real
+    // 6. Guardar relación Payment → Order
     try {
       await this.paymentsService.updatePaymentOrderId(paymentResult.transactionId, savedOrder.id);
     } catch (error) {
@@ -173,7 +184,8 @@ export class OrdersService {
       // No fallar el pedido si esto falla, ya está creado
     }
 
-    // 9. Notificar vía push notification (no bloquea si falla)
+    // 7. Notificar restaurante (solo si todo exitoso)
+    // Notificar vía push notification (no bloquea si falla)
     try {
       await this.notificationsService.notifyNewOrder(fullOrder);
     } catch (error) {

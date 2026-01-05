@@ -1,10 +1,12 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WompiClient, WompiTransaction, WompiWebhookEvent } from './providers/wompi.client';
 import { UserCardsService } from './user-cards.service';
 import { UsersService } from '../users/users.service';
 import { Payment, PaymentStatus } from './entities/payment.entity';
+import { BusinessException } from '../common/exceptions/business-exception';
+import { ResourceNotFoundException } from '../common/exceptions/not-found-exception';
 
 export interface ProcessPaymentResult {
   transactionId: string;
@@ -60,19 +62,28 @@ export class PaymentsService {
     // 1. Obtener usuario para email
     const user = await this.usersService.findOne(userId);
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
+      throw new ResourceNotFoundException('Usuario', { id: userId });
     }
 
     // 2. Obtener Payment Source
     let paymentSource;
     if (paymentSourceId) {
-      const card = await this.userCardsService.getCardById(paymentSourceId, userId);
-      paymentSource = card.wompiPaymentSourceId;
+      try {
+        const card = await this.userCardsService.getCardById(paymentSourceId, userId);
+        paymentSource = card.wompiPaymentSourceId;
+      } catch (error: any) {
+        // Si la tarjeta no existe, lanzar ResourceNotFoundException
+        throw new ResourceNotFoundException('Tarjeta', { id: paymentSourceId, userId });
+      }
     } else {
       // Usar tarjeta default
       const defaultCard = await this.userCardsService.getDefaultCard(userId);
       if (!defaultCard) {
-        throw new BadRequestException('No tienes una tarjeta configurada. Por favor, agrega una tarjeta primero.');
+        throw new BusinessException(
+          'No tienes una tarjeta configurada. Por favor, agrega una tarjeta primero.',
+          'PAYMENT_NO_CARD',
+          { userId },
+        );
       }
       paymentSource = defaultCard.wompiPaymentSourceId;
     }
@@ -92,7 +103,18 @@ export class PaymentsService {
       this.logger.log(`✅ Transacción creada: ${transaction.id} - Status: ${transaction.status}`);
     } catch (error: any) {
       this.logger.error(`❌ Error creando transacción: ${error.message}`);
-      throw new BadRequestException('Error al procesar el pago. Por favor, intenta nuevamente.');
+      // Error de Wompi → BusinessException con detalles
+      throw new BusinessException(
+        error.message || 'Error al procesar el pago con Wompi. Por favor, intenta nuevamente.',
+        'PAYMENT_WOMPI_ERROR',
+        {
+          userId,
+          paymentSourceId,
+          amount,
+          reference,
+          wompiError: error.response?.data || error.message,
+        },
+      );
     }
 
     // 5. Guardar registro de pago en BD (orderId se actualizará después de crear el pedido)
@@ -112,8 +134,17 @@ export class PaymentsService {
     // 6. Validar que el pago fue aprobado
     if (payment.status !== PaymentStatus.APPROVED) {
       this.logger.warn(`⚠️ Transacción no aprobada: ${transaction.id} - Status: ${transaction.status}`);
-      throw new BadRequestException(
-        transaction.status_message || 'El pago no pudo ser procesado. Por favor, verifica tu tarjeta.'
+      // Pago rechazado → BusinessException con código PAYMENT_DECLINED
+      throw new BusinessException(
+        transaction.status_message || 'El pago no pudo ser procesado. Por favor, verifica tu tarjeta.',
+        'PAYMENT_DECLINED',
+        {
+          transactionId: transaction.id,
+          status: transaction.status,
+          statusMessage: transaction.status_message,
+          reference,
+          amountInCents: transaction.amount_in_cents,
+        },
       );
     }
 
