@@ -8,11 +8,15 @@ import { UserCardsController } from './user-cards.controller';
 import { UserCardsService } from './user-cards.service';
 import { UserCard } from './entities/user-card.entity';
 import { UsersModule } from '../users/users.module';
+import { OrdersModule } from '../orders/orders.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Payment, UserCard]),
     UsersModule,
+    OrdersModule,
+    NotificationsModule,
   ],
   controllers: [PaymentsController, UserCardsController],
   providers: [

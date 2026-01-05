@@ -54,6 +54,9 @@ export class Payment {
   @Column({ name: 'finalized_at', nullable: true })
   finalizedAt?: Date;
 
+  @Column({ name: 'webhook_data', type: 'jsonb', nullable: true })
+  webhookData?: Record<string, any>;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

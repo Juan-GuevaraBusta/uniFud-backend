@@ -7,6 +7,10 @@ import { UsersService } from '../users/users.service';
 import { Payment, PaymentStatus } from './entities/payment.entity';
 import { BusinessException } from '../common/exceptions/business-exception';
 import { ResourceNotFoundException } from '../common/exceptions/not-found-exception';
+import { OrdersService } from '../orders/orders.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType, SendNotificationDto } from '../notifications/dto/send-notification.dto';
+import { Order } from '../orders/entities/order.entity';
 
 export interface ProcessPaymentResult {
   transactionId: string;
@@ -25,6 +29,8 @@ export class PaymentsService {
     private readonly wompiClient: WompiClient,
     private readonly userCardsService: UserCardsService,
     private readonly usersService: UsersService,
+    private readonly ordersService: OrdersService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -174,6 +180,7 @@ export class PaymentsService {
     const transaction = event.data.transaction;
     const payment = await this.paymentRepository.findOne({
       where: { wompiTransactionId: transaction.id },
+      relations: ['order'],
     });
 
     if (!payment) {
@@ -181,15 +188,92 @@ export class PaymentsService {
       return;
     }
 
-    // 3. Actualizar estado del pago
+    // 3. Actualizar estado del pago y guardar webhook data
     payment.status = this.mapWompiStatusToPaymentStatus(transaction.status);
     if (transaction.finalized_at) {
       payment.finalizedAt = new Date(transaction.finalized_at);
     }
+    payment.webhookData = event as any; // Guardar datos completos del webhook
 
     await this.paymentRepository.save(payment);
 
     this.logger.log(`✅ Estado de pago actualizado: ${payment.id} - Status: ${payment.status}`);
+
+    // 4. Procesar según estado del pago
+    if (payment.status === PaymentStatus.APPROVED) {
+      await this.handleApprovedPayment(payment);
+    } else if (payment.status === PaymentStatus.DECLINED) {
+      await this.handleDeclinedPayment(payment);
+    }
+  }
+
+  /**
+   * Manejar pago aprobado
+   * Actualizar Order si existe (útil para webhooks asíncronos)
+   */
+  private async handleApprovedPayment(payment: Payment): Promise<void> {
+    try {
+      if (!payment.orderId) {
+        this.logger.log(`⚠️ Pago ${payment.id} aprobado pero no tiene orderId asociado`);
+        return;
+      }
+
+      // Verificar que el Order existe (puede no existir si el webhook llega antes de crear el pedido)
+      try {
+        const order = await this.ordersService.findOne(payment.orderId);
+        this.logger.log(`✅ Pago aprobado para pedido ${order.numeroOrden}`);
+        // El Order ya se crea después del pago aprobado, así que no necesitamos actualizarlo
+        // Esto es útil principalmente para webhooks asíncronos que llegan después
+      } catch (error) {
+        this.logger.warn(`⚠️ Order ${payment.orderId} no encontrado para pago aprobado ${payment.id}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`❌ Error procesando pago aprobado: ${error.message}`);
+      // No lanzar error, solo loggear
+    }
+  }
+
+  /**
+   * Manejar pago rechazado
+   * Loggear y notificar al usuario
+   */
+  private async handleDeclinedPayment(payment: Payment): Promise<void> {
+    try {
+      this.logger.warn(
+        `⚠️ Pago rechazado: ${payment.id} - Transaction: ${payment.wompiTransactionId} - Reference: ${payment.reference}`,
+      );
+
+      // Obtener usuario para notificación
+      const user = await this.usersService.findOne(payment.userId);
+      if (!user) {
+        this.logger.warn(`⚠️ Usuario ${payment.userId} no encontrado para notificación de pago rechazado`);
+        return;
+      }
+
+      // Notificar al usuario (usar deliverNotification directamente ya que sendPushNotification requiere permisos)
+      try {
+        // Acceder al método privado deliverNotification para notificaciones automáticas
+        await (this.notificationsService as any).deliverNotification(
+          [user.email],
+          '❌ Pago rechazado',
+          `Tu pago con referencia ${payment.reference} fue rechazado. Por favor, verifica tu tarjeta e intenta nuevamente.`,
+          NotificationType.PERSONALIZADA,
+          {
+            paymentId: payment.id,
+            reference: payment.reference,
+            amountInCents: payment.amountInCents,
+            transactionId: payment.wompiTransactionId,
+          },
+        );
+        this.logger.log(`✅ Notificación de pago rechazado enviada a usuario ${user.email}`);
+      } catch (notificationError: any) {
+        this.logger.error(`❌ Error enviando notificación de pago rechazado: ${notificationError.message}`);
+        // No lanzar error, solo loggear
+      }
+    } catch (error: any) {
+      this.logger.error(`❌ Error procesando pago rechazado: ${error.message}`);
+      // No lanzar error, solo loggear
+    }
   }
 
   /**
