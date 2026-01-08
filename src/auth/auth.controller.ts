@@ -1,5 +1,6 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -8,6 +9,7 @@ import { AuthResponseDto } from './dto/auth-response.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { ThrottlerConfigs } from '../config/throttler.config';
 
 @ApiTags('Autenticación')
 @Controller('auth')
@@ -18,6 +20,7 @@ export class AuthController {
    * Registro de nuevo usuario
    */
   @Public()
+  @Throttle({ default: { limit: ThrottlerConfigs.REGISTER.limit, ttl: ThrottlerConfigs.REGISTER.ttl * 1000 } })
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -44,6 +47,7 @@ export class AuthController {
    * Login de usuario
    */
   @Public()
+  @Throttle({ default: { limit: ThrottlerConfigs.AUTH.limit, ttl: ThrottlerConfigs.AUTH.ttl * 1000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -64,6 +68,7 @@ export class AuthController {
    * Confirmación de email
    */
   @Public()
+  @Throttle({ default: { limit: ThrottlerConfigs.AUTH.limit, ttl: ThrottlerConfigs.AUTH.ttl * 1000 } })
   @Post('confirm-email')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -99,6 +104,7 @@ export class AuthController {
    * Reenvío de código de verificación
    */
   @Public()
+  @Throttle({ default: { limit: ThrottlerConfigs.REGISTER.limit, ttl: ThrottlerConfigs.REGISTER.ttl * 1000 } })
   @Post('resend-code')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -134,6 +140,7 @@ export class AuthController {
    * Refrescar access token
    */
   @Public()
+  @Throttle({ default: { limit: ThrottlerConfigs.REFRESH.limit, ttl: ThrottlerConfigs.REFRESH.ttl * 1000 } })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 

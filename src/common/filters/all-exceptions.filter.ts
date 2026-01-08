@@ -1,4 +1,5 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger, Inject } from '@nestjs/common';
+import { ThrottlerException } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger as WinstonLogger } from 'winston';
@@ -20,7 +21,49 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let message = 'Internal server error';
     let extra: Record<string, any> | undefined;
 
-    if (exception instanceof HttpException) {
+    // Manejar ThrottlerException (Rate Limiting)
+    if (exception instanceof ThrottlerException) {
+      status = HttpStatus.TOO_MANY_REQUESTS;
+      const res = exception.getResponse();
+      
+      if (typeof res === 'string') {
+        message = res;
+      } else if (typeof res === 'object' && res !== null) {
+        const { message: msg, ...rest } = res as Record<string, any>;
+        message = Array.isArray(msg) ? msg.join(', ') : msg ?? message;
+        extra = rest;
+      }
+
+      // Extraer información de rate limit de los headers o del contexto
+      // Los headers se setean automáticamente por ThrottlerGuard
+      const rateLimitLimit = response.getHeader('x-ratelimit-limit');
+      const rateLimitRemaining = response.getHeader('x-ratelimit-remaining');
+      const rateLimitReset = response.getHeader('x-ratelimit-reset');
+
+      // Si no están en los headers, calcularlos basándose en el error
+      // En un escenario real, el ThrottlerGuard debería setear estos headers
+      // Por ahora, los agregamos manualmente si no existen
+      if (!rateLimitLimit) {
+        response.setHeader('X-RateLimit-Limit', '100'); // Default
+      }
+      if (rateLimitRemaining !== undefined) {
+        response.setHeader('X-RateLimit-Remaining', rateLimitRemaining.toString());
+      } else {
+        response.setHeader('X-RateLimit-Remaining', '0');
+      }
+      if (rateLimitReset) {
+        response.setHeader('X-RateLimit-Reset', rateLimitReset.toString());
+      } else {
+        // Calcular reset time (aproximadamente, TTL desde ahora)
+        const resetTime = Math.floor(Date.now() / 1000) + 60; // Default 60 segundos
+        response.setHeader('X-RateLimit-Reset', resetTime.toString());
+      }
+
+      // Calcular segundos restantes para mensaje más descriptivo
+      const resetTime = parseInt(response.getHeader('X-RateLimit-Reset') as string || '0', 10);
+      const secondsUntilReset = Math.max(0, resetTime - Math.floor(Date.now() / 1000));
+      message = `Demasiadas solicitudes. Por favor, intenta de nuevo en ${secondsUntilReset} segundo${secondsUntilReset !== 1 ? 's' : ''}.`;
+    } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const res = exception.getResponse();
       if (typeof res === 'string') {

@@ -1,7 +1,9 @@
 import { Controller, Post, Body, Headers, HttpCode, HttpStatus, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { PaymentsService } from './payments.service';
 import { WompiWebhookEvent } from './providers/wompi.client';
+import { ThrottlerConfigs } from '../config/throttler.config';
 
 @ApiTags('Pagos')
 @Controller('payments')
@@ -10,6 +12,7 @@ export class PaymentsController {
 
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  @Throttle({ default: { limit: ThrottlerConfigs.WEBHOOK.limit, ttl: ThrottlerConfigs.WEBHOOK.ttl * 1000 } })
   @Post('webhooks')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Webhook para recibir eventos de Wompi' })
