@@ -1,0 +1,97 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    # Fase de warm-up: 10 usuarios por 30 segundos
+    - duration: 30
+      arrivalRate: 2
+      name: "Warm-up"
+    
+    # Fase principal: 50 usuarios simultáneos por 2 minutos
+    - duration: 120
+      arrivalRate: 25
+      name: "Carga normal"
+    
+    # Fase de pico: 100 usuarios por 1 minuto
+    - duration: 60
+      arrivalRate: 50
+      name: "Pico de carga"
+  
+  plugins:
+    expect: {}
+  
+  processor: "./test/load-test-processor.js"
+
+scenarios:
+  # Escenario 1: Consultar universidades (endpoint público, muy usado)
+  - name: "Consultar universidades"
+    weight: 30
+    flow:
+      - get:
+          url: "/universities"
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 2
+
+  # Escenario 2: Consultar restaurantes por universidad
+  - name: "Consultar restaurantes"
+    weight: 25
+    flow:
+      - function: "setUniversityId"
+      - get:
+          url: "/restaurants?universityId={{ universityId }}"
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 3
+
+  # Escenario 3: Consultar menú de restaurante
+  - name: "Consultar menú"
+    weight: 20
+    flow:
+      - function: "setRestaurantId"
+      - get:
+          url: "/dishes/menu/{{ restaurantId }}"
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 2
+
+  # Escenario 4: Consultar platos
+  - name: "Consultar platos"
+    weight: 15
+    flow:
+      - get:
+          url: "/dishes?limit=20&page=1"
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 1
+
+  # Escenario 5: Flujo completo de pedido (requiere autenticación - comentado por ahora)
+  # - name: "Crear pedido"
+  #   weight: 10
+  #   flow:
+  #     - function: "login"
+  #     - function: "setRestaurantId"
+  #     - post:
+  #         url: "/orders"
+  #         headers:
+  #           Authorization: "Bearer {{ token }}"
+  #         json:
+  #           restaurantId: "{{ restaurantId }}"
+  #           items:
+  #             - dishId: "{{ dishId }}"
+  #               dishNombre: "Plato de prueba"
+  #               cantidad: 1
+  #               precioUnitario: 10000
+  #               precioTotal: 10000
+  #         expect:
+  #           - statusCode: 201
+
+
+
+
+
+
+

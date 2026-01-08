@@ -6,7 +6,6 @@ import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { WinstonModule } from 'nest-winston';
 import { loggerConfig } from './config/logger.config';
@@ -20,8 +19,11 @@ async function bootstrap() {
     fs.mkdirSync(logsDir, { recursive: true });
   }
 
+  // Crear logger de Winston
+  const winstonLogger = WinstonModule.createLogger(loggerConfig);
+
   const app = await NestFactory.create(AppModule, {
-    logger: WinstonModule.createLogger(loggerConfig),
+    logger: winstonLogger,
   });
   
   // Configurar WebSocket adapter para Socket.IO
@@ -61,10 +63,8 @@ async function bootstrap() {
 
    app.useGlobalInterceptors(
      new ClassSerializerInterceptor(app.get(Reflector)),
-     app.get(LoggingInterceptor),
      new TransformInterceptor(),
    );
-   app.useGlobalFilters(app.get(AllExceptionsFilter));
 
    // Configuración de Swagger
    const config = new DocumentBuilder()
@@ -84,11 +84,10 @@ async function bootstrap() {
    const document = SwaggerModule.createDocument(app, config);
    SwaggerModule.setup('api/docs', app, document);
 
-   const port = process.env.PORT ?? 3000;
-   const logger = app.get('NestWinstonLogger') || console;
-   
-   logger.log(`Servidor iniciado en http://localhost:${port}`, 'Bootstrap');
-   logger.log(`Documentación Swagger disponible en http://localhost:${port}/api/docs`, 'Bootstrap');
+  const port = process.env.PORT ?? 3000;
+  
+  winstonLogger.log(`Servidor iniciado en http://localhost:${port}`, 'Bootstrap');
+  winstonLogger.log(`Documentación Swagger disponible en http://localhost:${port}/api/docs`, 'Bootstrap');
 
   await app.listen(port);
 }

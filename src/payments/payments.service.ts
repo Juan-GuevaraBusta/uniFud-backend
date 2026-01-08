@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WompiClient, WompiTransaction, WompiWebhookEvent } from './providers/wompi.client';
@@ -29,6 +29,7 @@ export class PaymentsService {
     private readonly wompiClient: WompiClient,
     private readonly userCardsService: UserCardsService,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
     private readonly notificationsService: NotificationsService,
   ) {}
