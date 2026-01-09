@@ -11,6 +11,7 @@ import { OrdersService } from '../orders/orders.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType, SendNotificationDto } from '../notifications/dto/send-notification.dto';
 import { Order } from '../orders/entities/order.entity';
+import { sanitizeForLogging } from '../common/utils/log-sanitizer.util';
 
 export interface ProcessPaymentResult {
   transactionId: string;
@@ -114,13 +115,13 @@ export class PaymentsService {
       throw new BusinessException(
         error.message || 'Error al procesar el pago con Wompi. Por favor, intenta nuevamente.',
         'PAYMENT_WOMPI_ERROR',
-        {
+        sanitizeForLogging({
           userId,
           paymentSourceId,
           amount,
           reference,
           wompiError: error.response?.data || error.message,
-        },
+        }),
       );
     }
 
@@ -145,13 +146,13 @@ export class PaymentsService {
       throw new BusinessException(
         transaction.status_message || 'El pago no pudo ser procesado. Por favor, verifica tu tarjeta.',
         'PAYMENT_DECLINED',
-        {
+        sanitizeForLogging({
           transactionId: transaction.id,
           status: transaction.status,
           statusMessage: transaction.status_message,
           reference,
           amountInCents: transaction.amount_in_cents,
-        },
+        }),
       );
     }
 

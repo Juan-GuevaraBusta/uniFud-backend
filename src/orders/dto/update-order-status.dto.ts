@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, IsNumber, Min } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsNumber, Min, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus } from '../entities/order.entity';
 import { Type } from 'class-transformer';
@@ -26,17 +26,21 @@ export class UpdateOrderStatusDto {
   @ApiPropertyOptional({
     description: 'Comentarios del restaurante sobre el cambio de estado',
     example: 'Tu pedido estará listo pronto',
+    maxLength: 500,
   })
   @IsOptional()
   @IsString()
+  @MaxLength(500, { message: 'Los comentarios no pueden exceder 500 caracteres' })
   comentarios?: string;
 
   @ApiPropertyOptional({
     description: 'Motivo de cancelación (obligatorio si status = CANCELADO)',
     example: 'No hay ingredientes disponibles',
+    maxLength: 500,
   })
   @IsOptional()
   @IsString()
+  @MaxLength(500, { message: 'El motivo de cancelación no puede exceder 500 caracteres' })
   motivoCancelacion?: string;
 }
 

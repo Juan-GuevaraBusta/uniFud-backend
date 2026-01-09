@@ -18,9 +18,11 @@ export class CreateDishDto {
   @ApiPropertyOptional({
     description: 'Descripción del plato',
     example: 'Deliciosa pizza con tomate, mozzarella y albahaca fresca',
+    maxLength: 2000,
   })
   @IsOptional()
   @IsString({ message: 'La descripción debe ser un texto' })
+  @MaxLength(2000, { message: 'La descripción no puede exceder 2000 caracteres' })
   descripcion?: string;
 
   @ApiProperty({

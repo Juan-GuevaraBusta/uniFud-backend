@@ -1,11 +1,13 @@
 import { NestFactory, Reflector } from '@nestjs/core';
-import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
+import { ValidationPipe, ClassSerializerInterceptor, ValidationError, BadRequestException } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { getCorsConfig } from './config/cors.config';
+import { getHelmetConfig } from './config/helmet.config';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { SanitizePipe } from './common/pipes/sanitize.pipe';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { WinstonModule } from 'nest-winston';
 import { loggerConfig } from './config/logger.config';
@@ -30,7 +32,7 @@ async function bootstrap() {
   app.useWebSocketAdapter(new IoAdapter(app));
   
    // Seguridad: Headers HTTP con Helmet
-   app.use(helmet());
+   app.use(helmet(getHelmetConfig()));
 
    // CORS con configuración por entorno
    const corsConfig = {
@@ -49,8 +51,33 @@ async function bootstrap() {
    
    app.enableCors(corsConfig);
  
-   // ValidationPipe global
+   // Función factory para excepciones personalizadas de validación
+   const exceptionFactory = (errors: ValidationError[]) => {
+     const messages = errors.map((error) => {
+       const constraints = error.constraints
+         ? Object.values(error.constraints)
+         : ['Error de validación'];
+       return constraints.join(', ');
+     });
+     
+     // En producción, no exponer detalles técnicos
+     const isProduction = process.env.NODE_ENV === 'production';
+     
+     if (isProduction) {
+       // Mensaje genérico en producción
+       throw new BadRequestException('Los datos proporcionados no son válidos');
+     }
+     
+     // En desarrollo/staging, mostrar detalles
+     throw new BadRequestException({
+       message: 'Error de validación',
+       errors: messages,
+     });
+   };
+
+   // Pipes globales: Sanitización primero, luego validación
    app.useGlobalPipes(
+     new SanitizePipe(), // Sanitizar inputs antes de validar
      new ValidationPipe({
        whitelist: true,
        forbidNonWhitelisted: true,
@@ -58,6 +85,8 @@ async function bootstrap() {
        transformOptions: {
          enableImplicitConversion: true,
        },
+       disableErrorMessages: process.env.NODE_ENV === 'production',
+       exceptionFactory,
      }),
    );
 

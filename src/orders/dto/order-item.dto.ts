@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsNumber, IsUUID, IsOptional, IsArray, ValidateNested, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsUUID, IsOptional, IsArray, ValidateNested, Min, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -95,9 +95,11 @@ export class OrderItemDto {
   @ApiPropertyOptional({
     description: 'Comentarios especiales para este item',
     example: 'Sin sal por favor',
+    maxLength: 500,
   })
   @IsOptional()
   @IsString()
+  @MaxLength(500, { message: 'Los comentarios no pueden exceder 500 caracteres' })
   comentarios?: string;
 }
 

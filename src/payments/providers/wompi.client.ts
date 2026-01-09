@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
+import { sanitizeForLogging } from '../../common/utils/log-sanitizer.util';
 
 export interface WompiPaymentSource {
   id: string;
@@ -129,7 +130,7 @@ export class WompiClient {
       this.logger.error(`❌ Error creando Payment Source: ${error.message}`);
       
       if (error.response?.data) {
-        this.logger.error(`Detalles del error: ${JSON.stringify(error.response.data)}`);
+        this.logger.error(`Detalles del error: ${JSON.stringify(sanitizeForLogging(error.response.data))}`);
       }
       
       throw new BadRequestException(
@@ -174,7 +175,7 @@ export class WompiClient {
       this.logger.error(`❌ Error creando transacción en Wompi: ${error.message}`);
       
       if (error.response?.data) {
-        this.logger.error(`Detalles del error: ${JSON.stringify(error.response.data)}`);
+        this.logger.error(`Detalles del error: ${JSON.stringify(sanitizeForLogging(error.response.data))}`);
       }
       
       throw new BadRequestException(

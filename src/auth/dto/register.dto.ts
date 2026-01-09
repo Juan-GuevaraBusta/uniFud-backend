@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, MaxLength, IsEnum, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, IsEnum, IsOptional, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../../users/entities/user.entity';
 
@@ -6,8 +6,13 @@ export class RegisterDto {
   @ApiProperty({
     description: 'Email del usuario',
     example: 'juan.perez@universidadean.edu.co',
+    maxLength: 255,
   })
   @IsEmail({}, { message: 'Debe proporcionar un email válido' })
+  @MaxLength(255, { message: 'El email no puede exceder 255 caracteres' })
+  @Matches(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, {
+    message: 'El formato del email no es válido',
+  })
   email: string;
 
   @ApiProperty({

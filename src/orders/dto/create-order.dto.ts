@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsArray, ValidateNested, ArrayMinSize } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID, IsArray, ValidateNested, ArrayMinSize, ArrayMaxSize, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { OrderItemDto } from './order-item.dto';
@@ -16,9 +16,11 @@ export class CreateOrderDto {
     description: 'Lista de items del pedido',
     type: [OrderItemDto],
     isArray: true,
+    maxItems: 50,
   })
   @IsArray({ message: 'Los items deben ser un array' })
   @ArrayMinSize(1, { message: 'Debe tener al menos un item en el pedido' })
+  @ArrayMaxSize(50, { message: 'No puede tener más de 50 items en el pedido' })
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
   items: OrderItemDto[];
@@ -26,9 +28,11 @@ export class CreateOrderDto {
   @ApiPropertyOptional({
     description: 'Comentarios adicionales del cliente para el restaurante',
     example: 'Por favor que esté bien caliente',
+    maxLength: 500,
   })
   @IsOptional()
   @IsString()
+  @MaxLength(500, { message: 'Los comentarios no pueden exceder 500 caracteres' })
   comentariosCliente?: string;
 
   @ApiPropertyOptional({

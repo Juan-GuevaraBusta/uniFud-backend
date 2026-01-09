@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, ConflictException, BadRequestExcepti
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { timingSafeEqual } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -11,6 +12,7 @@ import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from '../users/entities/user.entity';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger as WinstonLogger } from 'winston';
+import { sanitizeForLogging } from '../common/utils/log-sanitizer.util';
 
 @Injectable()
 export class AuthService {
@@ -44,13 +46,13 @@ export class AuthService {
     // TODO: Enviar email con código de verificación
     // Por ahora, lo logueamos para desarrollo
     this.logger.log(`Código de verificación generado para: ${user.email}`, 'AuthService');
-    this.winstonLogger.info('Código de verificación generado', {
+    this.winstonLogger.info('Código de verificación generado', sanitizeForLogging({
       context: AuthService.name,
       action: 'register',
       userId: user.id,
       userEmail: user.email,
       verificationCode,
-    });
+    }));
 
     return {
       message: 'Usuario registrado exitosamente. Por favor verifica tu email.',
@@ -115,8 +117,21 @@ export class AuthService {
       throw new BadRequestException('Este email ya ha sido verificado');
     }
 
-    // Verificar código
-    if (!user.verificationCode || user.verificationCode !== code) {
+    // Verificar código usando comparación segura contra timing attacks
+    if (!user.verificationCode) {
+      throw new BadRequestException('Código de verificación inválido');
+    }
+    
+    // Usar timingSafeEqual para prevenir timing attacks
+    const storedCode = Buffer.from(user.verificationCode, 'utf8');
+    const providedCode = Buffer.from(code, 'utf8');
+    
+    // Asegurar que ambos buffers tengan la misma longitud
+    if (storedCode.length !== providedCode.length) {
+      throw new BadRequestException('Código de verificación inválido');
+    }
+    
+    if (!timingSafeEqual(storedCode, providedCode)) {
       throw new BadRequestException('Código de verificación inválido');
     }
 
@@ -154,13 +169,13 @@ export class AuthService {
     // TODO: Enviar email con código de verificación
     // Por ahora, lo logueamos para desarrollo
     this.logger.log(`Nuevo código de verificación generado para: ${user.email}`, 'AuthService');
-    this.winstonLogger.info('Nuevo código de verificación generado', {
+    this.winstonLogger.info('Nuevo código de verificación generado', sanitizeForLogging({
       context: AuthService.name,
       action: 'resendVerificationCode',
       userId: user.id,
       userEmail: user.email,
       verificationCode,
-    });
+    }));
 
     return {
       message: 'Código de verificación reenviado exitosamente',
