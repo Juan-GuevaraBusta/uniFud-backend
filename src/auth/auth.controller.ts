@@ -39,6 +39,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 409, description: 'El email ya está registrado' })
+  @ApiResponse({ status: 429, description: 'Demasiadas solicitudes. Rate limit excedido.' })
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
@@ -60,6 +61,7 @@ export class AuthController {
     type: AuthResponseDto
   })
   @ApiResponse({ status: 401, description: 'Credenciales inválidas o email no verificado' })
+  @ApiResponse({ status: 429, description: 'Demasiadas solicitudes. Rate limit excedido.' })
   async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(loginDto);
   }
@@ -85,6 +87,7 @@ export class AuthController {
     }
   })
   @ApiResponse({ status: 400, description: 'Código inválido o expirado' })
+  @ApiResponse({ status: 429, description: 'Demasiadas solicitudes. Rate limit excedido.' })
   @ApiResponse({
     status: 500,
     description: 'Error interno del servidor',
@@ -132,6 +135,7 @@ export class AuthController {
     }
   })
   @ApiResponse({ status: 400, description: 'Usuario no encontrado o email ya verificado' })
+  @ApiResponse({ status: 429, description: 'Demasiadas solicitudes. Rate limit excedido.' })
   async resendCode(@Body('email') email: string) {
     return this.authService.resendVerificationCode(email);
   }
@@ -169,6 +173,7 @@ export class AuthController {
     }
   })
   @ApiResponse({ status: 401, description: 'Refresh token inválido o expirado' })
+  @ApiResponse({ status: 429, description: 'Demasiadas solicitudes. Rate limit excedido.' })
   @ApiResponse({
     status: 500,
     description: 'Error interno del servidor',

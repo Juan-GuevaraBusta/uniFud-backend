@@ -45,7 +45,7 @@ async function bootstrap() {
        'Accept',
        'Origin',
      ],
-     exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page'],
+     exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
      maxAge: 3600,
    };
    

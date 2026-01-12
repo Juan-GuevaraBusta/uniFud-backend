@@ -17,11 +17,42 @@
 							"listen": "test",
 							"script": {
 								"exec": [
+									"// Guardar userId si el registro es exitoso",
 									"if (pm.response.code === 201) {",
 									"    const response = pm.response.json();",
 									"    if (response.userId) {",
 									"        pm.environment.set(\"user_id\", response.userId);",
 									"    }",
+									"}",
+									"",
+									"// Tests de Rate Limiting - Headers X-RateLimit-*",
+									"pm.test(\"Response has X-RateLimit headers\", function () {",
+									"    if (pm.response.code !== 429) {",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Limit\")).to.be.true;",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Remaining\")).to.be.true;",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Reset\")).to.be.true;",
+									"    }",
+									"});",
+									"",
+									"// Tests de validación",
+									"if (pm.response.code === 400) {",
+									"    pm.test(\"Validation error format is correct\", function () {",
+									"        const response = pm.response.json();",
+									"        pm.expect(response).to.have.property(\"statusCode\", 400);",
+									"        pm.expect(response).to.have.property(\"message\");",
+									"    });",
+									"}",
+									"",
+									"// Test de rate limit excedido",
+									"if (pm.response.code === 429) {",
+									"    pm.test(\"Rate limit error format is correct\", function () {",
+									"        const response = pm.response.json();",
+									"        pm.expect(response).to.have.property(\"statusCode\", 429);",
+									"        pm.expect(response.message).to.include(\"Demasiadas solicitudes\");",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Limit\")).to.be.true;",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Remaining\")).to.be.true;",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Reset\")).to.be.true;",
+									"    });",
 									"}"
 								],
 								"type": "text/javascript"
@@ -79,6 +110,7 @@
 							"listen": "test",
 							"script": {
 								"exec": [
+									"// Guardar tokens si el login es exitoso",
 									"if (pm.response.code === 200) {",
 									"    const response = pm.response.json();",
 									"    if (response.data && response.data.accessToken) {",
@@ -92,6 +124,27 @@
 									"        pm.environment.set(\"user_id\", response.user.id);",
 									"        pm.environment.set(\"user_role\", response.user.role);",
 									"    }",
+									"}",
+									"",
+									"// Tests de Rate Limiting - Headers X-RateLimit-*",
+									"pm.test(\"Response has X-RateLimit headers\", function () {",
+									"    if (pm.response.code !== 429) {",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Limit\")).to.be.true;",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Remaining\")).to.be.true;",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Reset\")).to.be.true;",
+									"    }",
+									"});",
+									"",
+									"// Test de rate limit excedido",
+									"if (pm.response.code === 429) {",
+									"    pm.test(\"Rate limit error format is correct\", function () {",
+									"        const response = pm.response.json();",
+									"        pm.expect(response).to.have.property(\"statusCode\", 429);",
+									"        pm.expect(response.message).to.include(\"Demasiadas solicitudes\");",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Limit\")).to.be.true;",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Remaining\")).to.be.true;",
+									"        pm.expect(pm.response.headers.has(\"X-RateLimit-Reset\")).to.be.true;",
+									"    });",
 									"}"
 								],
 								"type": "text/javascript"
@@ -1472,6 +1525,238 @@
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "Tests de Seguridad",
+			"item": [
+				{
+					"name": "Invalid Email Format",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.expect(pm.response.code).to.equal(400);",
+									"});",
+									"",
+									"pm.test(\"Validation error format is correct\", function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response).to.have.property(\"statusCode\", 400);",
+									"    pm.expect(response).to.have.property(\"message\");",
+									"});",
+									"",
+									"pm.test(\"No sensitive information exposed\", function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.not.include(\"JWT_SECRET\");",
+									"    pm.expect(responseText).to.not.include(\"password\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"email-invalido-sin-arroba\",\n  \"password\": \"Password123!\",\n  \"nombre\": \"Test User\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						},
+						"description": "Test de validación: email con formato inválido debe retornar 400"
+					},
+					"response": []
+				},
+				{
+					"name": "Forbidden Fields",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.expect(pm.response.code).to.equal(400);",
+									"});",
+									"",
+									"pm.test(\"Validation error format is correct\", function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response).to.have.property(\"statusCode\", 400);",
+									"    pm.expect(response).to.have.property(\"message\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Password123!\",\n  \"nombre\": \"Test User\",\n  \"campoNoPermitido\": \"valor no permitido\",\n  \"otroCampoInvalido\": 123\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						},
+						"description": "Test de validación: campos no permitidos deben ser rechazados (forbidNonWhitelisted)"
+					},
+					"response": []
+				},
+				{
+					"name": "XSS Attempt",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// El input XSS debe ser sanitizado",
+									"// Si el registro es exitoso, el script debe haber sido removido",
+									"pm.test(\"Response status is acceptable\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([201, 400, 429]);",
+									"});",
+									"",
+									"if (pm.response.code === 201) {",
+									"    pm.test(\"XSS script was sanitized\", function () {",
+									"        const response = pm.response.json();",
+									"        const responseText = JSON.stringify(response);",
+									"        // Verificar que no contiene el script completo",
+									"        pm.expect(responseText).to.not.include(\"<script>alert\");",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"test-xss@example.com\",\n  \"password\": \"Password123!\",\n  \"nombre\": \"<script>alert('XSS')</script>Test User\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						},
+						"description": "Test de sanitización: intento de XSS debe ser sanitizado automáticamente"
+					},
+					"response": []
+				},
+				{
+					"name": "SQL Injection Attempt",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// El input SQL injection debe ser sanitizado",
+									"pm.test(\"Response status is acceptable\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([201, 400, 429]);",
+									"});",
+									"",
+									"if (pm.response.code === 201) {",
+									"    pm.test(\"SQL injection pattern was sanitized\", function () {",
+									"        const response = pm.response.json();",
+									"        const responseText = JSON.stringify(response);",
+									"        // Verificar que no contiene patrones SQL peligrosos",
+									"        pm.expect(responseText).to.not.include(\"DROP TABLE\");",
+									"        pm.expect(responseText).to.not.include(\"'; --\");",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"test-sql@example.com\",\n  \"password\": \"Password123!\",\n  \"nombre\": \"'; DROP TABLE users; --\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						},
+						"description": "Test de sanitización: intento de SQL injection debe ser sanitizado automáticamente"
+					},
+					"response": []
+				},
+				{
+					"name": "Password Too Short",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.expect(pm.response.code).to.equal(400);",
+									"});",
+									"",
+									"pm.test(\"Validation error format is correct\", function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response).to.have.property(\"statusCode\", 400);",
+									"    pm.expect(response).to.have.property(\"message\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"short\",\n  \"nombre\": \"Test User\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						},
+						"description": "Test de validación: contraseña muy corta debe retornar 400"
+					},
+					"response": []
+				}
+			],
+			"description": "Tests de seguridad: validaciones, sanitización y rate limiting"
 		}
 	],
 	"event": [

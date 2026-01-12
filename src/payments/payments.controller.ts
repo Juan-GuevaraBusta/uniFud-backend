@@ -4,6 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { PaymentsService } from './payments.service';
 import { WompiWebhookEvent } from './providers/wompi.client';
 import { ThrottlerConfigs } from '../config/throttler.config';
+import { Public } from '../common/decorators/public.decorator';
 
 @ApiTags('Pagos')
 @Controller('payments')
@@ -12,6 +13,7 @@ export class PaymentsController {
 
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  @Public() // Webhooks de Wompi vienen de servicio externo, no pueden autenticarse con JWT
   @Throttle({ default: { limit: ThrottlerConfigs.WEBHOOK.limit, ttl: ThrottlerConfigs.WEBHOOK.ttl * 1000 } })
   @Post('webhooks')
   @HttpCode(HttpStatus.OK)
@@ -29,6 +31,7 @@ export class PaymentsController {
     status: 400,
     description: 'Firma inválida o datos incorrectos',
   })
+  @ApiResponse({ status: 429, description: 'Demasiadas solicitudes. Rate limit excedido.' })
   async handleWebhook(
     @Body() event: WompiWebhookEvent,
     @Headers('x-signature') signature?: string,

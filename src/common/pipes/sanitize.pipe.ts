@@ -1,6 +1,6 @@
 import { PipeTransform, Injectable, ArgumentMetadata } from '@nestjs/common';
 import { JSDOM } from 'jsdom';
-import * as DOMPurify from 'dompurify';
+import createDOMPurify from 'dompurify';
 
 /**
  * Pipe de sanitización para prevenir XSS, SQL injection y NoSQL injection
@@ -12,7 +12,7 @@ import * as DOMPurify from 'dompurify';
  */
 @Injectable()
 export class SanitizePipe implements PipeTransform {
-  private readonly domPurify: ReturnType<typeof DOMPurify>;
+  private readonly domPurify: ReturnType<typeof createDOMPurify>;
   private readonly sqlInjectionPatterns: RegExp[];
   private readonly nosqlInjectionPatterns: RegExp[];
 
@@ -29,7 +29,7 @@ export class SanitizePipe implements PipeTransform {
   constructor() {
     // Inicializar DOMPurify para Node.js
     const window = new JSDOM('').window;
-    this.domPurify = DOMPurify(window as any);
+    this.domPurify = createDOMPurify(window as any);
 
     // Patrones de SQL injection a limpiar
     this.sqlInjectionPatterns = [
