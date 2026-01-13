@@ -225,34 +225,52 @@ describe('Payments E2E', () => {
   describe('Flujo completo: Agregar tarjeta → Pedido → Pago', () => {
     it.skip('debe completar el flujo completo de pago (requiere configuración completa)', async () => {
       // Este test requiere:
-      // 1. Token válido de Wompi sandbox
+      // 1. Token válido de Wompi sandbox (tokenizado desde Wompi.js)
       // 2. Usuario autenticado
       // 3. Restaurante y platos en la BD
       // 4. Configuración completa de Wompi
+      // 
+      // NOTA: La tokenización de tarjetas debe hacerse desde el frontend con Wompi.js.
+      // Para testing real, ver: docs/WOMPI_SANDBOX_TESTING.md
 
       if (!authToken) {
+        console.log('⏭️  Saltando test: no hay token de autenticación');
+        return;
+      }
+
+      // Verificar si hay credenciales de Wompi configuradas
+      const wompiPrivateKey = process.env.WOMPI_PRIVATE_KEY;
+      const hasWompiCredentials = wompiPrivateKey && wompiPrivateKey.startsWith('prv_test_');
+
+      if (!hasWompiCredentials) {
+        console.log('⏭️  Saltando test: credenciales de Wompi sandbox no configuradas');
+        console.log('  Configura WOMPI_PRIVATE_KEY, WOMPI_PUBLIC_KEY, WOMPI_INTEGRITY_SECRET en .env');
         return;
       }
 
       // Paso 1: Agregar tarjeta
+      // NOTA: Esto requiere un token tokenizado real desde Wompi.js
+      // Para testing manual, ver: docs/WOMPI_SANDBOX_TESTING.md
       const cardResponse = await request(app.getHttpServer())
         .post('/payments/cards')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          token: 'wompi_test_token',
-          acceptanceToken: 'wompi_acceptance_token',
-          acceptPersonalAuth: 'wompi_personal_auth',
+          token: process.env.WOMPI_TEST_TOKEN || 'wompi_test_token_placeholder',
+          acceptanceToken: process.env.WOMPI_TEST_ACCEPTANCE_TOKEN || 'wompi_acceptance_token_placeholder',
+          acceptPersonalAuth: process.env.WOMPI_TEST_ACCEPT_PERSONAL_AUTH || 'wompi_personal_auth_placeholder',
         });
 
       if (cardResponse.status !== 201) {
-        // Si no se puede crear la tarjeta, saltar el test
+        console.log('⏭️  Saltando test: no se puede crear tarjeta (requiere token real de Wompi.js)');
+        console.log('  Para testing real, obtén tokens desde Wompi.js en el frontend');
+        console.log('  Ver: docs/WOMPI_SANDBOX_TESTING.md');
         return;
       }
 
       const cardId = cardResponse.body.data?.id || cardResponse.body.id;
 
       // Paso 2: Crear pedido (requiere restaurante y platos)
-      // Este paso se omite porque requiere más setup
+      // Este paso se omite porque requiere más setup de datos de prueba
 
       // Paso 3: Procesar pago
       // Este paso se omite porque requiere integración completa

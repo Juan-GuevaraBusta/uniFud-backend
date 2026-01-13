@@ -9,6 +9,9 @@ import { UserCardsService } from './user-cards.service';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
 import { UserCard } from './entities/user-card.entity';
+import { OrdersService } from '../orders/orders.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { BusinessException } from '../common/exceptions/business-exception';
 
 describe('PaymentsService', () => {
   let service: PaymentsService;
@@ -85,6 +88,18 @@ describe('PaymentsService', () => {
             findOne: jest.fn(),
           },
         },
+        {
+          provide: OrdersService,
+          useValue: {
+            // Mock de OrdersService - métodos que se usan en PaymentsService
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: {
+            // Mock de NotificationsService - métodos que se usan en PaymentsService
+          },
+        },
       ],
     }).compile();
 
@@ -121,12 +136,12 @@ describe('PaymentsService', () => {
 
       const result = await service.processOrderPayment('user_123', 100);
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         transactionId: 'tx_test_123',
         status: 'APPROVED',
-        reference: 'UFD-123',
         amountInCents: 10000,
       });
+      expect(result.reference).toMatch(/^UFD-\d+$/); // La referencia se genera dinámicamente
       expect(usersService.findOne).toHaveBeenCalledWith('user_123');
       expect(userCardsService.getDefaultCard).toHaveBeenCalledWith('user_123');
       expect(wompiClient.createTransaction).toHaveBeenCalled();
@@ -138,8 +153,13 @@ describe('PaymentsService', () => {
         ...mockUserCard,
         wompiPaymentSourceId: 'ps_specific_123',
       } as any);
-      jest.spyOn(wompiClient, 'createTransaction').mockResolvedValue(mockTransaction);
-      jest.spyOn(paymentRepository, 'create').mockReturnValue({} as Payment);
+      jest.spyOn(wompiClient, 'createTransaction').mockResolvedValue({
+        ...mockTransaction,
+        status: 'APPROVED',
+      });
+      jest.spyOn(paymentRepository, 'create').mockReturnValue({
+        status: PaymentStatus.APPROVED,
+      } as Payment);
       jest.spyOn(paymentRepository, 'save').mockResolvedValue({
         status: PaymentStatus.APPROVED,
       } as Payment);
@@ -156,14 +176,14 @@ describe('PaymentsService', () => {
       await expect(service.processOrderPayment('invalid_user', 100)).rejects.toThrow(NotFoundException);
     });
 
-    it('debe lanzar BadRequestException si no hay tarjeta default', async () => {
+    it('debe lanzar BusinessException si no hay tarjeta default', async () => {
       jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
       jest.spyOn(userCardsService, 'getDefaultCard').mockResolvedValue(null);
 
-      await expect(service.processOrderPayment('user_123', 100)).rejects.toThrow(BadRequestException);
+      await expect(service.processOrderPayment('user_123', 100)).rejects.toThrow(BusinessException);
     });
 
-    it('debe lanzar BadRequestException si el pago no es aprobado', async () => {
+    it('debe lanzar BusinessException si el pago no es aprobado', async () => {
       jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
       jest.spyOn(userCardsService, 'getDefaultCard').mockResolvedValue(mockUserCard);
       jest.spyOn(wompiClient, 'createTransaction').mockResolvedValue({
@@ -178,7 +198,7 @@ describe('PaymentsService', () => {
         status: PaymentStatus.DECLINED,
       } as Payment);
 
-      await expect(service.processOrderPayment('user_123', 100)).rejects.toThrow(BadRequestException);
+      await expect(service.processOrderPayment('user_123', 100)).rejects.toThrow(BusinessException);
     });
   });
 
@@ -210,17 +230,20 @@ describe('PaymentsService', () => {
         wompiTransactionId: 'tx_test_123',
         status: PaymentStatus.PENDING,
         finalizedAt: null,
-        save: jest.fn().mockResolvedValue({}),
+        orderId: null,
+        order: null,
+        webhookData: null,
       };
 
       jest.spyOn(wompiClient, 'verifyWebhookSignature').mockReturnValue(true);
       jest.spyOn(paymentRepository, 'findOne').mockResolvedValue(mockPayment as any);
+      jest.spyOn(paymentRepository, 'save').mockResolvedValue(mockPayment as any);
 
       await service.handleWebhook(mockWebhookEvent as any, 'valid_signature');
 
       expect(mockPayment.status).toBe(PaymentStatus.APPROVED);
       expect(mockPayment.finalizedAt).toBeInstanceOf(Date);
-      expect(mockPayment.save).toHaveBeenCalled();
+      expect(paymentRepository.save).toHaveBeenCalled();
     });
 
     it('debe lanzar BadRequestException si la firma es inválida', async () => {

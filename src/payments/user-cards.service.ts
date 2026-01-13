@@ -237,11 +237,12 @@ export class UserCardsService {
       return 'VISA';
     }
 
-    // Mastercard: 51-55 o 2221-2720
+    // Mastercard: 51-55 o 2221-2720 (primeros 4 dígitos)
     if (firstTwoDigits >= '51' && firstTwoDigits <= '55') {
       return 'MASTERCARD';
     }
-    if (bin >= '2221' && bin <= '2720') {
+    const firstFourDigits = bin.substring(0, 4);
+    if (firstFourDigits >= '2221' && firstFourDigits <= '2720') {
       return 'MASTERCARD';
     }
 
