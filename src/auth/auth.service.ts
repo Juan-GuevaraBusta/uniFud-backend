@@ -228,11 +228,13 @@ export class AuthService {
       role: user.role,
     };
 
-    const accessToken = this.jwtService.sign(payload);
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: this.configService.get<string>('jwt.expiration') || '1h',
+    });
     
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('jwt.refreshSecret'),
-      expiresIn: this.configService.get<string>('jwt.refreshExpiration'),
+      expiresIn: this.configService.get<string>('jwt.refreshExpiration') || '7d',
     });
 
     return {

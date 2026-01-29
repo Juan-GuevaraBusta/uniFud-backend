@@ -233,6 +233,23 @@ function transformEnvValues(config: Record<string, unknown>): Record<string, unk
   return transformed;
 }
 
+// Lista de propiedades permitidas para validación (evita errores con variables del sistema)
+const ALLOWED_ENV_PROPERTIES = [
+  'NODE_ENV', 'PORT', 'DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_NAME',
+  'JWT_SECRET', 'JWT_EXPIRATION', 'JWT_REFRESH_SECRET', 'JWT_REFRESH_EXPIRATION',
+  'WOMPI_PUBLIC_KEY', 'WOMPI_PRIVATE_KEY', 'WOMPI_INTEGRITY_SECRET', 'WOMPI_API_URL',
+  'SIIGO_API_URL', 'SIIGO_USERNAME', 'SIIGO_ACCESS_KEY',
+  'REDIS_HOST', 'REDIS_PORT', 'REDIS_PASSWORD', 'REDIS_ENABLED',
+  'CORS_ORIGIN', 'LOG_LEVEL', 'EXPO_ACCESS_TOKEN',
+  'THROTTLE_TTL_GENERAL', 'THROTTLE_LIMIT_GENERAL', 'THROTTLE_TTL_AUTH', 'THROTTLE_LIMIT_AUTH',
+  'THROTTLE_TTL_REGISTER', 'THROTTLE_LIMIT_REGISTER', 'THROTTLE_TTL_REFRESH', 'THROTTLE_LIMIT_REFRESH',
+  'THROTTLE_TTL_CREATE', 'THROTTLE_LIMIT_CREATE', 'THROTTLE_TTL_WEBHOOK', 'THROTTLE_LIMIT_WEBHOOK',
+  'SIIGO_DOCUMENT_ID', 'SIIGO_COST_CENTER', 'SIIGO_SELLER', 'SIIGO_TAX_ID',
+  'SIIGO_PAYMENT_CASH_ID', 'SIIGO_PAYMENT_CARD_ID',
+  'CACHE_TTL', 'CACHE_MAX_ITEMS',
+  'STAGING_BACKEND_URL', 'STAGING_WEB_URL', 'PRODUCTION_BACKEND_URL', 'PRODUCTION_WEB_URL',
+];
+
 /**
  * Validar variables de entorno
  * Se ejecuta antes de inicializar la aplicación
@@ -242,13 +259,30 @@ function transformEnvValues(config: Record<string, unknown>): Record<string, unk
  * @throws Error si hay variables faltantes o inválidas
  */
 export function validate(config: Record<string, unknown>) {
-  // Transformar valores de string a tipos correctos
-  const transformedConfig = transformEnvValues(config);
-
-  // Determinar entorno
+  // Determinar entorno PRIMERO (antes de filtrar)
   const nodeEnv = (config.NODE_ENV as string) || process.env.NODE_ENV || 'development';
   const isDevelopment = nodeEnv === 'development';
   const isProduction = nodeEnv === 'production';
+
+  // Filtrar solo las propiedades permitidas ANTES de transformar
+  // Esto evita que variables del sistema (HOME, PATH, etc.) causen errores
+  const filteredConfig: Record<string, unknown> = {};
+  // Asegurar que NODE_ENV esté siempre presente
+  filteredConfig.NODE_ENV = nodeEnv;
+  
+  for (const key of ALLOWED_ENV_PROPERTIES) {
+    if (key in config && key !== 'NODE_ENV') {
+      filteredConfig[key] = config[key];
+    }
+  }
+
+  // Transformar valores de string a tipos correctos
+  const transformedConfig = transformEnvValues(filteredConfig);
+  
+  // Asegurar que NODE_ENV esté presente después de la transformación
+  if (!transformedConfig.NODE_ENV) {
+    transformedConfig.NODE_ENV = nodeEnv;
+  }
 
   // En desarrollo, saltar validación estricta - solo validaciones básicas opcionales
   if (isDevelopment) {
@@ -288,14 +322,27 @@ export function validate(config: Record<string, unknown>) {
   }
 
   // En producción y staging, validación estricta completa
-  const validatedConfig = plainToInstance(EnvironmentVariables, transformedConfig, {
+  // Usar solo las propiedades permitidas para evitar errores con variables del sistema
+  const configForValidation: Record<string, any> = {};
+  // Asegurar que NODE_ENV esté siempre presente con un valor válido
+  const finalNodeEnv = (transformedConfig.NODE_ENV as string) || nodeEnv || 'development';
+  configForValidation.NODE_ENV = finalNodeEnv;
+  
+  for (const key of Object.keys(transformedConfig)) {
+    // Solo incluir propiedades que están definidas en EnvironmentVariables
+    if (ALLOWED_ENV_PROPERTIES.includes(key) && key !== 'NODE_ENV') {
+      configForValidation[key] = transformedConfig[key];
+    }
+  }
+
+  const validatedConfig = plainToInstance(EnvironmentVariables, configForValidation, {
     enableImplicitConversion: true,
   });
 
   const errors = validateSync(validatedConfig, {
     skipMissingProperties: false,
     whitelist: true,
-    forbidNonWhitelisted: true,
+    forbidNonWhitelisted: false, // No rechazar propiedades adicionales (ya las filtramos arriba)
   });
 
   if (errors.length > 0) {

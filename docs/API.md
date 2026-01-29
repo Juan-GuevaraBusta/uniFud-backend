@@ -209,6 +209,210 @@ curl -X POST http://localhost:3000/auth/refresh \
 | DELETE | `/payments/cards/:id` | Eliminar tarjeta | ✅ Requerido |
 | POST | `/payments/webhooks` | Webhook de Wompi | ❌ No requerido (firma requerida) |
 
+### Facturas (`/invoices`)
+
+| Método | Endpoint | Descripción | Autenticación |
+|--------|----------|-------------|---------------|
+| GET | `/invoices/:id` | Obtener factura por ID | ✅ Requerido |
+| GET | `/invoices/order/:orderId` | Obtener factura por número de pedido | ✅ Requerido |
+
+---
+
+## Integración con Siigo - Facturación Electrónica
+
+### Introducción
+
+UniFoodApp utiliza **Siigo** para generar facturas electrónicas automáticamente cuando un pedido se completa exitosamente. Siigo es una plataforma de contabilidad en la nube que permite la emisión de facturas electrónicas válidas en Colombia.
+
+**Flujo automático de facturación:**
+1. Usuario crea pedido y pago es aprobado
+2. Pedido se guarda en la base de datos
+3. Sistema intenta crear factura en Siigo automáticamente (no bloquea el pedido si falla)
+4. Factura se guarda en BD local con referencia a Siigo
+5. Usuario puede consultar su factura en cualquier momento
+
+### Endpoints de Facturación
+
+#### Obtener Factura por ID
+
+```bash
+curl -X GET http://localhost:3000/invoices/INVOICE_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Respuesta**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "orderId": "order-uuid",
+    "siigoInvoiceId": "siigo-invoice-id",
+    "invoiceNumber": "FE-001234",
+    "invoicePrefix": "FE",
+    "customerName": "Juan Pérez",
+    "customerDocument": "1234567890",
+    "customerDocumentType": "CC",
+    "customerEmail": "juan.perez@universidadean.edu.co",
+    "subtotal": 10000.00,
+    "tax": 1900.00,
+    "total": 11900.00,
+    "paymentMethod": "card",
+    "items": [
+      {
+        "description": "Pizza Margarita",
+        "quantity": 2,
+        "unitPrice": 5000.00,
+        "tax": 1900.00,
+        "total": 11900.00
+      }
+    ],
+    "pdfUrl": "https://api.siigo.com/invoices/siigo-invoice-id/pdf",
+    "xmlUrl": "https://api.siigo.com/invoices/siigo-invoice-id/xml",
+    "status": "sent",
+    "sentAt": "2024-01-15T10:30:00.000Z",
+    "createdAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+#### Obtener Factura por Pedido
+
+```bash
+curl -X GET http://localhost:3000/invoices/order/ORDER_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Respuesta**: Misma estructura que obtener por ID.
+
+### Estructura de Datos
+
+#### Campos Principales
+
+- **`id`**: UUID de la factura en UniFoodApp
+- **`siigoInvoiceId`**: ID de la factura en Siigo (puede ser null si falló la creación)
+- **`invoiceNumber`**: Número consecutivo de factura (ej: "FE-001234")
+- **`invoicePrefix`**: Prefijo de factura (generalmente "FE" para Factura Electrónica)
+- **`customerName`**: Nombre del cliente
+- **`customerDocument`**: NIT o CC del cliente
+- **`customerDocumentType`**: Tipo de documento ("CC", "NIT", "CE")
+- **`subtotal`**: Subtotal sin IVA
+- **`tax`**: IVA (19% en Colombia)
+- **`total`**: Total con IVA
+- **`items`**: Array de items de la factura
+- **`pdfUrl`**: URL del PDF de la factura en Siigo
+- **`xmlUrl`**: URL del XML de la factura en Siigo
+- **`status`**: Estado de la factura ("pending", "sent", "paid", "cancelled", "error")
+
+### Flujo Automático
+
+La facturación es **automática y asíncrona**:
+
+1. **Cuándo se crea**: Cuando un pedido se completa exitosamente (pago aprobado)
+2. **Qué pasa si falla**: Si la creación en Siigo falla, el pedido **NO se afecta**. La factura se guarda con estado "error" para referencia
+3. **Guardado en BD**: Todas las facturas se guardan en la base de datos local, incluso si falló la creación en Siigo
+4. **Reintentos**: El sistema no reintenta automáticamente. Si falla, se debe revisar manualmente
+
+### Manejo de Errores
+
+#### Errores Comunes de Siigo API
+
+- **`SIIGO_CREDENTIALS_MISSING`**: Credenciales de Siigo no configuradas
+- **`SIIGO_AUTH_FAILED`**: Error de autenticación con Siigo (credenciales inválidas)
+- **`SIIGO_AUTH_ERROR`**: Error general de autenticación
+- **`SIIGO_TOKEN_ERROR`**: No se pudo obtener token de acceso
+- **`SIIGO_INVOICE_CREATION_ERROR`**: Error al crear factura en Siigo
+- **`SIIGO_INVOICE_NOT_FOUND`**: Factura no encontrada en Siigo
+- **`SIIGO_INVOICE_GET_ERROR`**: Error al obtener factura de Siigo
+- **`SIIGO_PDF_ERROR`**: Error al obtener PDF de factura
+
+#### Ejemplo de Error
+
+```json
+{
+  "success": false,
+  "message": "Error creando factura en Siigo: Cliente no encontrado",
+  "statusCode": 400,
+  "errorCode": "SIIGO_INVOICE_CREATION_ERROR",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "path": "/orders"
+}
+```
+
+**Nota**: Si la creación de factura falla, el pedido se crea normalmente. La factura se guarda con estado "error" y `siigoInvoiceId` null.
+
+### Variables de Entorno
+
+Las siguientes variables deben estar configuradas en `.env`:
+
+```env
+# Siigo API
+SIIGO_API_URL=https://api.siigo.com
+SIIGO_USERNAME=usuario@unifoodapp.com
+SIIGO_ACCESS_KEY=access_key_xxxxx
+
+# IDs de Configuración (opcionales, con valores por defecto)
+SIIGO_DOCUMENT_ID=24446          # ID del tipo de documento
+SIIGO_COST_CENTER=235            # ID del centro de costos
+SIIGO_SELLER=629                 # ID del vendedor
+SIIGO_TAX_ID=13156               # ID del impuesto IVA (19%)
+SIIGO_PAYMENT_CASH_ID=5636       # ID de forma de pago efectivo
+SIIGO_PAYMENT_CARD_ID=10462      # ID de forma de pago tarjeta
+```
+
+**Nota**: Siigo NO tiene un sandbox oficial. Para testing, se debe usar una empresa de prueba en Siigo Nube.
+
+### Ejemplos de Uso
+
+#### Consultar Factura de un Pedido
+
+```bash
+# 1. Crear pedido (se genera factura automáticamente)
+ORDER_ID=$(curl -X POST http://localhost:3000/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "restaurantId": "restaurant-uuid",
+    "items": [...],
+    "paymentSourceId": "card-uuid"
+  }' | jq -r '.data.id')
+
+# 2. Obtener factura del pedido
+curl -X GET http://localhost:3000/invoices/order/$ORDER_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Ver Factura por ID
+
+```bash
+curl -X GET http://localhost:3000/invoices/INVOICE_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Descargar PDF de Factura
+
+Una vez obtenida la factura, el campo `pdfUrl` contiene la URL del PDF en Siigo:
+
+```bash
+# Obtener factura
+INVOICE=$(curl -X GET http://localhost:3000/invoices/INVOICE_ID \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.data.pdfUrl')
+
+# Descargar PDF (requiere autenticación con Siigo)
+curl -X GET "$INVOICE" \
+  -H "Authorization: Bearer SIIGO_TOKEN"
+```
+
+**Nota**: Para descargar el PDF directamente, se requiere un token de Siigo válido. El PDF se puede acceder desde el portal de Siigo o mediante la API de Siigo con las credenciales correspondientes.
+
+### Permisos de Acceso
+
+- **Estudiantes**: Solo pueden ver sus propias facturas (asociadas a sus pedidos)
+- **Propietarios de restaurante**: Solo pueden ver facturas de pedidos de su restaurante
+- **Administradores**: Pueden ver todas las facturas
+
+Si intentas acceder a una factura que no te pertenece, recibirás un error `403 Forbidden`.
+
 ---
 
 ## Ejemplos de Uso
@@ -289,6 +493,73 @@ curl -X POST http://localhost:3000/notifications/register \
   }'
 ```
 
+### Flujo Completo: Crear Pedido → Ver Factura Generada
+
+```bash
+# 1. Crear pedido (se genera factura automáticamente)
+ORDER_RESPONSE=$(curl -X POST http://localhost:3000/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "restaurantId": "restaurant-uuid",
+    "items": [
+      {
+        "dishId": "dish-uuid",
+        "dishNombre": "Pizza Margarita",
+        "cantidad": 2,
+        "precioUnitario": 15000,
+        "precioTotal": 30000
+      }
+    ],
+    "paymentSourceId": "card-uuid"
+  }')
+
+ORDER_ID=$(echo $ORDER_RESPONSE | jq -r '.data.id')
+
+# 2. Esperar unos segundos para que se procese la factura
+sleep 3
+
+# 3. Obtener factura del pedido
+curl -X GET http://localhost:3000/invoices/order/$ORDER_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Respuesta esperada**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "invoice-uuid",
+    "orderId": "order-uuid",
+    "siigoInvoiceId": "siigo-invoice-id",
+    "invoiceNumber": "FE-001234",
+    "invoicePrefix": "FE",
+    "customerName": "Juan Pérez",
+    "customerEmail": "juan.perez@universidadean.edu.co",
+    "subtotal": 30000.00,
+    "tax": 5700.00,
+    "total": 35700.00,
+    "pdfUrl": "https://api.siigo.com/invoices/siigo-invoice-id/pdf",
+    "status": "sent",
+    "createdAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+### Consultar Facturas de un Usuario
+
+Actualmente no hay un endpoint para listar todas las facturas de un usuario. Para obtener una factura específica:
+
+```bash
+# Por ID de factura
+curl -X GET http://localhost:3000/invoices/INVOICE_ID \
+  -H "Authorization: Bearer $TOKEN"
+
+# Por ID de pedido
+curl -X GET http://localhost:3000/invoices/order/ORDER_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ---
 
 ## Códigos de Error
@@ -361,6 +632,21 @@ Todos los errores siguen este formato:
 - `PAYMENT_TRANSACTION_FAILED`: Error al procesar el pago
 - `PAYMENT_WEBHOOK_INVALID_SIGNATURE`: Firma de webhook inválida
 - `PAYMENT_CARD_CREATION_FAILED`: Error al crear tarjeta en Wompi
+- `PAYMENT_DECLINED`: Pago rechazado por Wompi
+- `PAYMENT_WOMPI_ERROR`: Error general de Wompi
+
+#### Facturación (Siigo)
+
+- `SIIGO_CREDENTIALS_MISSING`: Credenciales de Siigo no configuradas
+- `SIIGO_AUTH_FAILED`: Error de autenticación con Siigo (credenciales inválidas)
+- `SIIGO_AUTH_ERROR`: Error general de autenticación con Siigo
+- `SIIGO_TOKEN_ERROR`: No se pudo obtener token de acceso de Siigo
+- `SIIGO_INVOICE_CREATION_ERROR`: Error al crear factura en Siigo
+- `SIIGO_INVOICE_NOT_FOUND`: Factura no encontrada en Siigo
+- `SIIGO_INVOICE_GET_ERROR`: Error al obtener factura de Siigo
+- `SIIGO_PDF_ERROR`: Error al obtener PDF de factura
+
+**Nota**: Si la creación de factura en Siigo falla, el pedido se crea normalmente. La factura se guarda con estado "error" para referencia.
 
 ---
 

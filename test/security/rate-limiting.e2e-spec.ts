@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import request from 'supertest';
 import { AppModule } from '../../src/app.module';
+import { User } from '../../src/users/entities/user.entity';
 
 /**
  * Tests E2E para Rate Limiting
@@ -15,50 +18,103 @@ import { AppModule } from '../../src/app.module';
  */
 describe('Rate Limiting E2E', () => {
   let app: INestApplication;
+  let moduleFixture: TestingModule;
+  let userRepository: Repository<User>;
   let testUser1Token: string;
   let testUser1Id: string;
+  let testUser1Email: string;
   let testUser1RefreshToken: string;
   let testUser2Token: string;
   let testUser2Id: string;
+  let testUser2Email: string;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
+    moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
 
+    // Obtener repositorio de usuarios
+    userRepository = moduleFixture.get<Repository<User>>(getRepositoryToken(User));
+
     // Crear primer usuario de prueba
     const timestamp1 = Date.now();
+    testUser1Email = `test-rate-limit-user1-${timestamp1}@test.com`;
+    const password = 'Test123456!';
+    
     const registerResponse1 = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
-        email: `test-rate-limit-user1-${timestamp1}@test.com`,
-        password: 'Test123456!',
+        email: testUser1Email,
+        password,
         nombre: 'Test User 1 Rate Limit',
       });
 
     if (registerResponse1.status === 201) {
-      testUser1Id = registerResponse1.body.data.user.id;
+      testUser1Id = registerResponse1.body.userId || registerResponse1.body.data?.userId;
       
-      // Obtener código de verificación (en producción vendría por email)
-      // Por ahora, necesitamos verificar el email antes de poder hacer login
-      // Para los tests, asumimos que el usuario puede autenticarse
+      // Confirmar email y obtener token
+      const user1 = await userRepository.findOne({ where: { id: testUser1Id } });
+      if (user1 && user1.verificationCode) {
+        await request(app.getHttpServer())
+          .post('/auth/confirm-email')
+          .send({
+            email: testUser1Email,
+            code: user1.verificationCode,
+          });
+        
+        const loginResponse1 = await request(app.getHttpServer())
+          .post('/auth/login')
+          .send({
+            email: testUser1Email,
+            password,
+          });
+        
+        if (loginResponse1.status === 200) {
+          testUser1Token = loginResponse1.body.accessToken || loginResponse1.body.data?.accessToken;
+          testUser1RefreshToken = loginResponse1.body.refreshToken || loginResponse1.body.data?.refreshToken;
+        }
+      }
     }
 
     // Crear segundo usuario de prueba
     const timestamp2 = Date.now() + 1;
+    testUser2Email = `test-rate-limit-user2-${timestamp2}@test.com`;
+    
     const registerResponse2 = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
-        email: `test-rate-limit-user2-${timestamp2}@test.com`,
-        password: 'Test123456!',
+        email: testUser2Email,
+        password,
         nombre: 'Test User 2 Rate Limit',
       });
 
     if (registerResponse2.status === 201) {
-      testUser2Id = registerResponse2.body.data.user.id;
+      testUser2Id = registerResponse2.body.userId || registerResponse2.body.data?.userId;
+      
+      // Confirmar email y obtener token
+      const user2 = await userRepository.findOne({ where: { id: testUser2Id } });
+      if (user2 && user2.verificationCode) {
+        await request(app.getHttpServer())
+          .post('/auth/confirm-email')
+          .send({
+            email: testUser2Email,
+            code: user2.verificationCode,
+          });
+        
+        const loginResponse2 = await request(app.getHttpServer())
+          .post('/auth/login')
+          .send({
+            email: testUser2Email,
+            password,
+          });
+        
+        if (loginResponse2.status === 200) {
+          testUser2Token = loginResponse2.body.accessToken || loginResponse2.body.data?.accessToken;
+        }
+      }
     }
   });
 

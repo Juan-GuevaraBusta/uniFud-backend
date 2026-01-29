@@ -1,49 +1,72 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { User } from '../src/users/entities/user.entity';
 import { WompiWebhookEvent } from '../src/payments/providers/wompi.client';
 import * as crypto from 'crypto';
 
 describe('Payments E2E', () => {
   let app: INestApplication;
+  let moduleFixture: TestingModule;
+  let userRepository: Repository<User>;
   let authToken: string;
   let userId: string;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
+    moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
 
+    // Obtener repositorio de usuarios para acceder al código de verificación
+    userRepository = moduleFixture.get<Repository<User>>(getRepositoryToken(User));
+
     // Crear usuario de prueba y obtener token
-    // Nota: En un entorno real, esto debería usar un usuario de prueba pre-existente
-    // o crear uno mediante el endpoint de registro
+    const timestamp = Date.now();
+    const testEmail = `test-payments-${timestamp}@example.com`;
+    const password = 'Test123456!';
+    
     const registerResponse = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
-        email: `test-payments-${Date.now()}@example.com`,
-        password: 'Test123456!',
+        email: testEmail,
+        password,
         nombre: 'Test User Payments',
       });
 
     if (registerResponse.status === 201) {
-      userId = registerResponse.body.data.user.id;
-      authToken = registerResponse.body.data.accessToken;
-    } else {
-      // Si el registro falla, intentar login con credenciales de prueba
-      const loginResponse = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          email: 'test@example.com',
-          password: 'Test123456!',
-        });
-
-      if (loginResponse.status === 200) {
-        authToken = loginResponse.body.data.accessToken;
-        userId = loginResponse.body.data.user.id;
+      // El registro retorna { message, userId } (puede estar envuelto en data por TransformInterceptor)
+      userId = registerResponse.body.userId || registerResponse.body.data?.userId;
+      
+      // Obtener código de verificación desde BD
+      const user = await userRepository.findOne({ where: { id: userId } });
+      
+      if (user && user.verificationCode) {
+        // Confirmar email
+        await request(app.getHttpServer())
+          .post('/auth/confirm-email')
+          .send({
+            email: testEmail,
+            code: user.verificationCode,
+          });
+        
+        // Hacer login para obtener token
+        const loginResponse = await request(app.getHttpServer())
+          .post('/auth/login')
+          .send({
+            email: testEmail,
+            password,
+          });
+        
+        if (loginResponse.status === 200) {
+          authToken = loginResponse.body.accessToken || loginResponse.body.data?.accessToken;
+          userId = loginResponse.body.user?.id || loginResponse.body.data?.user?.id || userId;
+        }
       }
     }
   });

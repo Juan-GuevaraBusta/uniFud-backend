@@ -36,11 +36,11 @@ export class User {
     @Column({ default: false })
     emailVerified: boolean;
 
-    @Column({ length: 6 })
+    @Column({ length: 6, nullable: true })
     @Exclude()
     verificationCode?: string;
 
-    @Column({ type: 'timestamp' })
+    @Column({ type: 'timestamp', nullable: true })
     @Exclude()
     verificationCodeExpiry?: Date;
 
