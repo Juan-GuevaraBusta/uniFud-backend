@@ -12,5 +12,8 @@
         "module": "commonjs"
       }
     }
-  }
+  },
+  "setupFilesAfterEnv": ["<rootDir>/setup.ts"],
+  "testTimeout": 60000,
+  "maxWorkers": 1
 }
